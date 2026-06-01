@@ -10,7 +10,7 @@ COPY apps/api/package.json ./apps/api/
 COPY prisma/schema.prisma ./prisma/schema.prisma
 COPY prisma.config.ts ./prisma.config.ts
 
-RUN npm install --ignore-scripts
+RUN npm install --ignore-scripts --legacy-peer-deps
 
 # ─── Stage 2: Generate Prisma client ───
 FROM deps AS prisma
