@@ -84,11 +84,13 @@ export class PortalController {
       req.ip ||
       undefined;
 
+    const origin = req.headers["origin"] || "*";
+
     if (identity.tier === "free") {
-      return this.handleFreeRequest(identity, requestData, ip, res);
+      return this.handleFreeRequest(identity, requestData, ip, res, origin);
     }
 
-    return this.handlePaidRequest(identity, requestData, res);
+    return this.handlePaidRequest(identity, requestData, res, origin);
   }
 
   @Get("usage")
@@ -347,6 +349,7 @@ export class PortalController {
     body: ChatCompletionRequest,
     ip: string | undefined,
     res: FastifyReply,
+    origin: string,
   ) {
     // Get or create session
     const session = await this.tierService.getOrCreateSession(
@@ -396,7 +399,8 @@ export class PortalController {
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
           Connection: "keep-alive",
-          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Origin": origin,
+          "Access-Control-Allow-Credentials": "true",
         });
         const chunk = JSON.stringify({
           choices: [{ delta: { content: inputCheck.userMessage } }],
@@ -413,7 +417,8 @@ export class PortalController {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
-      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Origin": origin,
+      "Access-Control-Allow-Credentials": "true",
     });
 
     try {
@@ -436,8 +441,47 @@ export class PortalController {
         max_tokens: body.max_tokens ?? 4096,
       });
 
+      let fullContent = "";
       for await (const chunk of stream) {
         res.raw.write(`data: ${chunk}\n\n`);
+        // Accumulate content for conversation saving
+        try {
+          const parsed = JSON.parse(chunk);
+          const delta = parsed.choices?.[0]?.delta?.content;
+          if (delta) fullContent += delta;
+        } catch {
+          // ignore parse errors
+        }
+      }
+
+      // Save conversation for logged-in users (even free tier)
+      if (identity.user && fullContent) {
+        const conversationId = await this.conversation.getOrCreateConversation(
+          identity.user.id,
+          cheapest.slug,
+          body.conversation_id,
+        );
+
+        this.conversation
+          .saveMessages(conversationId, body.messages, fullContent)
+          .then(async () => {
+            if (!body.conversation_id) {
+              const firstUserMsg = body.messages.find((m) => m.role === "user");
+              if (firstUserMsg) {
+                await this.conversation.generateTitle(
+                  conversationId,
+                  firstUserMsg.content,
+                );
+              }
+            }
+          })
+          .catch((err) =>
+            this.logger.error("Failed to save free-tier conversation", err),
+          );
+
+        res.raw.write(
+          `data: ${JSON.stringify({ conversation_id: conversationId })}\n\n`,
+        );
       }
 
       res.raw.write("data: [DONE]\n\n");
@@ -458,6 +502,7 @@ export class PortalController {
     identity: PortalIdentity,
     body: ChatCompletionRequest,
     res: FastifyReply,
+    origin: string,
   ) {
     const user = identity.user!;
     const startTime = Date.now();
@@ -476,7 +521,8 @@ export class PortalController {
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
           Connection: "keep-alive",
-          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Origin": origin,
+          "Access-Control-Allow-Credentials": "true",
         });
         const chunk = JSON.stringify({
           choices: [{ delta: { content: inputCheck.userMessage } }],
@@ -526,7 +572,8 @@ export class PortalController {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
-      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Origin": origin,
+      "Access-Control-Allow-Credentials": "true",
     });
 
     let fullContent = "";
@@ -654,6 +701,22 @@ export class PortalController {
       // Refund on failure
       await this.billing.refundReservation(user.id, reservedAmount);
       this.logger.error(`Stream error: ${error.message}`, error.stack);
+
+      // Save partial conversation if we accumulated any content
+      if (fullContent) {
+        this.conversation
+          .getOrCreateConversation(user.id, body.model, body.conversation_id)
+          .then((convId) =>
+            this.conversation.saveMessages(convId, body.messages, fullContent),
+          )
+          .catch((err) =>
+            this.logger.error(
+              "Failed to save partial conversation on error",
+              err,
+            ),
+          );
+      }
+
       res.raw.write(
         `data: ${JSON.stringify({ error: { message: "Stream error. Balance refunded." } })}\n\n`,
       );
