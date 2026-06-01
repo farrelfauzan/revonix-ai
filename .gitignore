@@ -34,3 +34,5 @@ Thumbs.db
 .idea
 *.swp
 *.swo
+# Terraform secrets
+infra/terraform.tfvars
