@@ -12,7 +12,6 @@ import {
   ArrowLeft,
   ArrowDown,
   Send,
-  Loader2,
   Plus,
   MessageSquare,
   StopCircle,
