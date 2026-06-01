@@ -51,6 +51,7 @@ export function AgentSettingsPanel({ channelId }: { channelId: string | null }) 
   const { data: wsData } = useChannelWorkspace(channelId);
   const createWorkspace = useCreateChannelWorkspace();
   const workspaceId = wsData?.workspace?.id ?? null;
+  const workspaceReady = !!workspaceId;
 
   // Ensure a workspace exists for the selected server so OAuth integrations can connect.
   useEffect(() => {
@@ -200,10 +201,10 @@ export function AgentSettingsPanel({ channelId }: { channelId: string | null }) 
             use your per-user account for the selected server.
           </p>
 
-          {!channelId && (
+          {!workspaceReady && (
             <div className="border border-dashed border-zinc-700 rounded-lg p-3 mb-3">
               <p className="text-xs text-zinc-500">
-                Select a server first to connect OAuth integrations.
+                Workspace is required before connecting integrations.
               </p>
             </div>
           )}
@@ -219,7 +220,11 @@ export function AgentSettingsPanel({ channelId }: { channelId: string | null }) 
               {availableEntries.map((entry) => (
                 <div
                   key={entry.name}
-                  className="border border-zinc-800 rounded-lg p-3 flex items-center justify-between bg-zinc-900/30 hover:bg-zinc-900/60 transition-colors"
+                  className={`border border-zinc-800 rounded-lg p-3 flex items-center justify-between transition-colors ${
+                    workspaceReady
+                      ? "bg-zinc-900/30 hover:bg-zinc-900/60"
+                      : "bg-zinc-900/20 opacity-60"
+                  }`}
                 >
                   <div className="flex items-center gap-3 min-w-0 flex-1">
                     <IntegrationProviderLogo
@@ -240,7 +245,9 @@ export function AgentSettingsPanel({ channelId }: { channelId: string | null }) 
                     size="sm"
                     variant="outline"
                     className="ml-2 shrink-0"
+                    disabled={!workspaceReady}
                     onClick={() => setConnectProvider(entry)}
+                    title={!workspaceReady ? "Create/select a workspace first" : "Connect"}
                   >
                     <Plus className="h-3.5 w-3.5 mr-1" />
                     Connect
