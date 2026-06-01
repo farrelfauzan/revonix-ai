@@ -1,19 +1,18 @@
 # Build context: monorepo root
-# Usage: docker build -f apps/landing/Dockerfile .
+# Usage: docker build -f apps/chat/Dockerfile .
 
 # ─── Stage 1: Install dependencies ───
 FROM node:22-alpine AS deps
 WORKDIR /app
 
 COPY package.json ./
-COPY apps/landing/package.json ./apps/landing/
-COPY prisma/schema.prisma ./prisma/schema.prisma
-COPY prisma.config.ts ./prisma.config.ts
+COPY apps/chat/package.json ./apps/chat/
 
 RUN npm install --ignore-scripts --legacy-peer-deps
 
 # ─── Stage 2: Build ───
 FROM deps AS builder
+WORKDIR /app
 
 COPY . .
 COPY --from=deps /app/node_modules ./node_modules
@@ -21,7 +20,10 @@ COPY --from=deps /app/node_modules ./node_modules
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
-RUN cd apps/landing && npx next build
+ARG NEXT_PUBLIC_API_URL=https://api.renovix.id
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
+RUN cd apps/chat && npx next build
 
 # ─── Stage 3: Production (Hardened) ───
 FROM node:22-alpine
@@ -35,18 +37,18 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 --ingroup nodejs nextjs
 
-COPY --from=builder --chown=nextjs:nodejs /app/apps/landing/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/apps/landing/.next/static ./apps/landing/.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/apps/landing/public ./apps/landing/public
+COPY --from=builder --chown=nextjs:nodejs /app/apps/chat/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/apps/chat/.next/static ./apps/chat/.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/apps/chat/public ./apps/chat/public
 
 USER nextjs
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3001/ || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
 
-EXPOSE 3001
-ENV PORT=3001
+EXPOSE 3000
+ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "apps/landing/server.js"]
+CMD ["node", "apps/chat/server.js"]
