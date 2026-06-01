@@ -21,10 +21,10 @@ RUN DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" npx prisma gene
 # ─── Stage 3: Build ───
 FROM prisma AS builder
 
-COPY . .
-
 COPY --from=prisma /app/node_modules ./node_modules
 COPY --from=prisma /app/apps/api/src/generated ./apps/api/src/generated
+
+COPY . .
 
 RUN cd apps/api && npx webpack-cli build --config webpack.docker.config.js
 
