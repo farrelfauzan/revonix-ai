@@ -13,6 +13,11 @@ import { join } from "path";
 
 async function bootstrap(): Promise<NestFastifyApplication> {
   const isDev = process.env.NODE_ENV === "development";
+  const corsOrigins = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean)
+    : true;
 
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
@@ -20,18 +25,12 @@ async function bootstrap(): Promise<NestFastifyApplication> {
       bodyLimit: isDev ? 50 * 1024 * 1024 : 1024 * 1024,
     }),
     {
-      cors: isDev
-        ? {
-            origin: true,
-            methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-            allowedHeaders: [
-              "Content-Type",
-              "Authorization",
-              "X-Portal-Session",
-            ],
-            credentials: true,
-          }
-        : false,
+      cors: {
+        origin: isDev ? true : corsOrigins,
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization", "X-Portal-Session"],
+        credentials: true,
+      },
       logger: isDev
         ? ["debug", "error", "warn", "verbose", "log"]
         : ["error", "warn"],
