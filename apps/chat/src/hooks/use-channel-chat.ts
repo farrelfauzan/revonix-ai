@@ -60,6 +60,7 @@ export function useChannelChat(
                 ? { output_format: options.output_format }
                 : {}),
             }),
+            credentials: "include",
             signal: controller.signal,
           },
         );

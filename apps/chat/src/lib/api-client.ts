@@ -32,6 +32,7 @@ export interface TypedAxiosInstance extends AxiosInstance {
 const axiosConfig: CreateAxiosDefaults = {
   baseURL: config.apiUrl,
   timeout: 30000,
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   },

@@ -48,6 +48,7 @@ export function WorkspaceIntegrations({ channelId }: { channelId: string }) {
   const { data: wsData } = useChannelWorkspace(channelId);
   const createWorkspace = useCreateChannelWorkspace();
   const workspaceId = wsData?.workspace?.id ?? null;
+  const workspaceReady = !!workspaceId;
   const didCreateRef = useRef(false);
 
   console.log("[WorkspaceIntegrations]", { channelId, wsData, workspaceId });
@@ -196,6 +197,13 @@ export function WorkspaceIntegrations({ channelId }: { channelId: string }) {
             </p>
           </div>
         </div>
+        {!workspaceReady && (
+          <div className="border border-dashed rounded-lg p-3 mb-3">
+            <p className="text-xs text-muted-foreground">
+              Workspace is required before connecting integrations.
+            </p>
+          </div>
+        )}
         {(() => {
           const oauthProviderNames = ["google-gmail", "google-calendar", "google-sheets", "github", "slack"];
           const availableEntries = (registry || []).filter(
@@ -217,7 +225,9 @@ export function WorkspaceIntegrations({ channelId }: { channelId: string }) {
               {availableEntries.map((entry) => (
                 <div
                   key={entry.name}
-                  className="border rounded-lg p-3 flex items-center justify-between"
+                  className={`border rounded-lg p-3 flex items-center justify-between ${
+                    workspaceReady ? "" : "opacity-60"
+                  }`}
                 >
                   <div className="flex items-center gap-3 min-w-0 flex-1">
                     <IntegrationProviderLogo
@@ -236,7 +246,9 @@ export function WorkspaceIntegrations({ channelId }: { channelId: string }) {
                     size="sm"
                     variant="outline"
                     className="ml-2 shrink-0"
+                    disabled={!workspaceReady}
                     onClick={() => setConnectProvider(entry)}
+                    title={!workspaceReady ? "Create/select a workspace first" : "Connect"}
                   >
                     <Plus className="h-3.5 w-3.5 mr-1" />
                     Connect

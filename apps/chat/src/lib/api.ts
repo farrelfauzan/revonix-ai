@@ -62,6 +62,7 @@ export function streamCompletion(
   fetch(`${API_BASE}/chat/portal/completions`, {
     method: "POST",
     headers,
+    credentials: "include",
     body: JSON.stringify({
       messages,
       ...(model ? { model } : {}),

@@ -42,7 +42,8 @@
     "src/**/*.jsx",
     "../../apps/landing/.next/types/**/*.ts",
     "../../dist/apps/landing/.next/types/**/*.ts",
-    "next-env.d.ts"
+    "next-env.d.ts",
+    "index.d.ts"
   ],
   "exclude": [
     "out-tsc",

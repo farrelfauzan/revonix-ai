@@ -36,6 +36,8 @@ export function McpConnectDialog({
   const isOAuthProvider = provider.authType === "oauth";
   const workspaceReady = !!workspaceId;
 
+  console.log("Workspace ID:", workspaceId);
+
   const handleOAuthConnect = async () => {
     if (!workspaceId) {
       toast.error("No active workspace selected");
@@ -123,6 +125,11 @@ export function McpConnectDialog({
         ) : (
           <>
             <div className="space-y-4 py-4">
+              {!workspaceReady && (
+                <p className="text-xs text-muted-foreground">
+                  Workspace is required before connecting this integration.
+                </p>
+              )}
               {provider.envKeys.map((key) => (
                 <div key={key} className="space-y-1.5">
                   <label className="text-sm font-medium">{formatEnvLabel(key)}</label>
@@ -130,6 +137,7 @@ export function McpConnectDialog({
                     type="password"
                     placeholder={`Enter ${formatEnvLabel(key).toLowerCase()}`}
                     value={envValues[key] || ""}
+                    disabled={!workspaceReady}
                     onChange={(e) =>
                       setEnvValues((prev) => ({ ...prev, [key]: e.target.value }))
                     }
@@ -159,7 +167,7 @@ export function McpConnectDialog({
               >
                 Cancel
               </Button>
-              <Button onClick={handleConnect} disabled={connectToken.isPending}>
+              <Button onClick={handleConnect} disabled={!workspaceReady || connectToken.isPending}>
                 {connectToken.isPending && (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 )}

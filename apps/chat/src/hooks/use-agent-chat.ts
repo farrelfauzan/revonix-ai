@@ -59,6 +59,7 @@ export function useAgentChat(agentId: string) {
                 ? { output_format: options.output_format }
                 : {}),
             }),
+            credentials: "include",
             signal: controller.signal,
           },
         );

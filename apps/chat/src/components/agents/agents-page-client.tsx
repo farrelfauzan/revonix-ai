@@ -68,6 +68,7 @@ import { ServerTeamSidebar } from "@/components/workspace/server-team-sidebar";
 import { WorkspaceSettings } from "@/components/settings/workspace-settings";
 import { AgentSettingsPanel } from "@/components/settings/agent-settings-panel";
 import { config } from "@/lib/config";
+import { apiClient } from "@/lib/api-client";
 
 function isS3Icon(icon: string | null | undefined): boolean {
   if (!icon) return false;
@@ -172,7 +173,15 @@ export default function AgentsPageClient() {
 
   const subscription = subscriptionData?.subscription;
 
-  if (!subLoading && !subscription) {
+  if (subLoading || channelsLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!subscription) {
     return (
       <SubscriptionPricing
         onSubscribe={(tier) => {
@@ -1116,6 +1125,48 @@ function SubscriptionPricing({
   onSubscribe: (tier: string) => void;
   isLoading: boolean;
 }) {
+  const [code, setCode] = useState("");
+  const [redeemLoading, setRedeemLoading] = useState(false);
+  const [redeemResult, setRedeemResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
+
+  const handleRedeem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!code.trim()) return;
+
+    setRedeemLoading(true);
+    setRedeemResult(null);
+
+    try {
+      const res = await apiClient.post<{
+        success: boolean;
+        creditsGranted?: number | null;
+        planGranted?: string | null;
+        daysGranted?: number | null;
+      }>("/codes/redeem", { code: code.trim().toUpperCase() });
+
+      setRedeemResult({
+        success: true,
+        message: `Code redeemed! ${res.creditsGranted ? `$${res.creditsGranted} credit added.` : ""} ${res.planGranted ? `${res.planGranted} plan activated for ${res.daysGranted} days.` : ""}`.trim(),
+      });
+      setCode("");
+      // Reload the page after short delay to reflect new subscription
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (err: any) {
+      setRedeemResult({
+        success: false,
+        message:
+          err?.response?.data?.message ||
+          err?.message ||
+          "Failed to redeem code",
+      });
+    } finally {
+      setRedeemLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-5xl mx-auto p-6 py-12">
@@ -1128,6 +1179,46 @@ function SubscriptionPricing({
           <p className="text-muted-foreground max-w-lg mx-auto">
             Subscribe to unlock AI Agents that automate your workflows, manage
             projects, and integrate with your favorite tools.
+          </p>
+        </div>
+
+        {/* Code Redemption Section */}
+        <div className="max-w-md mx-auto mb-10 border rounded-xl p-6 bg-secondary/20">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="h-4 w-4 text-primary" />
+            <span className="text-sm font-medium">Have an invitation code?</span>
+          </div>
+          <form onSubmit={handleRedeem} className="flex gap-2">
+            <Input
+              type="text"
+              placeholder="PERF-XXXX-XXXX"
+              value={code}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              className="font-mono tracking-wider"
+              maxLength={14}
+              required
+            />
+            <Button type="submit" disabled={redeemLoading || !code.trim()} size="sm">
+              {redeemLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Redeem"
+              )}
+            </Button>
+          </form>
+          {redeemResult && (
+            <p
+              className={`text-xs mt-2 ${
+                redeemResult.success
+                  ? "text-emerald-500"
+                  : "text-destructive"
+              }`}
+            >
+              {redeemResult.message}
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground mt-2">
+            Redeem a code to get free credits and a subscription plan instantly.
           </p>
         </div>
 
