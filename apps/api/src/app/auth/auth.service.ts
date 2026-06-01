@@ -7,7 +7,7 @@ import { JwtService } from "@nestjs/jwt";
 import * as bcrypt from "bcrypt";
 import * as crypto from "crypto";
 import { PrismaService } from "../prisma/prisma.service";
-import { RegisterDto, LoginDto } from "./dto/create-auth.dto";
+import { RegisterDto, LoginDto, UpdateProfileDto } from "./dto/create-auth.dto";
 
 @Injectable()
 export class AuthService {
@@ -40,10 +40,12 @@ export class AuthService {
         email: dto.email,
         password: hashedPassword,
         apiKey,
+        name: dto.name || null,
       },
       select: {
         id: true,
         email: true,
+        name: true,
         apiKey: true,
         balance: true,
         createdAt: true,
@@ -68,10 +70,22 @@ export class AuthService {
       throw new UnauthorizedException("Invalid email or password");
     }
 
+    if (!user.password) {
+      throw new UnauthorizedException(
+        "This account uses social login. Please sign in with Google or GitHub.",
+      );
+    }
+
     const valid = await bcrypt.compare(dto.password, user.password);
     if (!valid) {
       throw new UnauthorizedException("Invalid email or password");
     }
+
+    // Track last login
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    });
 
     const token = this.signToken(user.id, user.email);
 
@@ -79,6 +93,7 @@ export class AuthService {
       user: {
         id: user.id,
         email: user.email,
+        name: user.name,
         balance: user.balance,
         createdAt: user.createdAt,
       },
@@ -92,9 +107,21 @@ export class AuthService {
       select: {
         id: true,
         email: true,
+        emailVerified: true,
+        name: true,
+        firstName: true,
+        lastName: true,
+        avatar: true,
+        phone: true,
+        company: true,
+        jobTitle: true,
+        timezone: true,
+        locale: true,
+        status: true,
         balance: true,
         apiKey: true,
         createdAt: true,
+        updatedAt: true,
       },
     });
     return {
@@ -114,6 +141,27 @@ export class AuthService {
       apiKeyWarning:
         "Store this key securely. It will not be shown again in full.",
     };
+  }
+
+  async updateProfile(userId: string, dto: UpdateProfileDto) {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: dto,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        company: true,
+        jobTitle: true,
+        timezone: true,
+        locale: true,
+        updatedAt: true,
+      },
+    });
+    return user;
   }
 
   private signToken(userId: string, email: string): string {
