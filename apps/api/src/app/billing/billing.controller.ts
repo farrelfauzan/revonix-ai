@@ -7,8 +7,9 @@ import {
   Req,
   UseGuards,
   BadRequestException,
+  ServiceUnavailableException,
 } from "@nestjs/common";
-import { AuthGuard } from "@nestjs/passport";
+import { CombinedAuthGuard } from "../guards/combined-auth.guard";
 import { ConfigService } from "@nestjs/config";
 import type Stripe from "stripe";
 import { BillingService } from "./billing.service";
@@ -35,14 +36,14 @@ export class BillingController {
   }
 
   @Get("balance")
-  @UseGuards(AuthGuard("jwt"))
+  @UseGuards(CombinedAuthGuard)
   async getBalance(@Req() req: any) {
     const balance = await this.billing.getBalance(req.user.userId);
     return { balance };
   }
 
   @Get("transactions")
-  @UseGuards(AuthGuard("jwt"))
+  @UseGuards(CombinedAuthGuard)
   async getTransactions(
     @Req() req: any,
     @Query("limit") limit?: string,
@@ -67,8 +68,17 @@ export class BillingController {
   }
 
   @Post("checkout")
-  @UseGuards(AuthGuard("jwt"))
+  @UseGuards(CombinedAuthGuard)
   async createCheckout(@Req() req: any, @Body() body: { amount?: number }) {
+    if (
+      !this.configService.get<string>("STRIPE_ENABLED") ||
+      this.configService.get<string>("STRIPE_ENABLED") === "false"
+    ) {
+      throw new ServiceUnavailableException(
+        "Payment via Stripe is temporarily disabled. Please use an invitation code to top up credits.",
+      );
+    }
+
     if (!this.stripe) {
       throw new BadRequestException("Payment system not configured");
     }

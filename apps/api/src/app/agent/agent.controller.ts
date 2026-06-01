@@ -13,7 +13,7 @@ import {
   BadRequestException,
 } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
-import { AuthGuard } from "@nestjs/passport";
+import { CombinedAuthGuard } from "../guards/combined-auth.guard";
 import { AgentService } from "./agent.service";
 import { CreateAgentSchema } from "./dto/create-agent.dto";
 import { UpdateAgentSchema } from "./dto/update-agent.dto";
@@ -25,7 +25,7 @@ import {
 } from "./dto/agent-chat.dto";
 
 @Controller("agents")
-@UseGuards(AuthGuard("jwt"))
+@UseGuards(CombinedAuthGuard)
 export class AgentController {
   constructor(private readonly agentService: AgentService) {}
 

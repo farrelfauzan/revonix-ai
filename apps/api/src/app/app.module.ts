@@ -24,6 +24,7 @@ import { WorkspaceModule } from "./workspace/workspace.module";
 import { McpModule } from "./mcp/mcp.module";
 import { GuardrailModule } from "./guardrail/guardrail.module";
 import { ReminderModule } from "./reminder/reminder.module";
+import { CodesModule } from "./codes/codes.module";
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { ReminderModule } from "./reminder/reminder.module";
     McpModule,
     GuardrailModule,
     ReminderModule,
+    CodesModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],

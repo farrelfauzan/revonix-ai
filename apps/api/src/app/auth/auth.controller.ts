@@ -2,16 +2,17 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Body,
   Req,
   UseGuards,
   BadRequestException,
   HttpCode,
 } from "@nestjs/common";
-import { AuthGuard } from "@nestjs/passport";
 import { Throttle } from "@nestjs/throttler";
+import { CombinedAuthGuard } from "../guards/combined-auth.guard";
 import { AuthService } from "./auth.service";
-import { RegisterDto, LoginDto } from "./dto/create-auth.dto";
+import { RegisterDto, LoginDto, UpdateProfileDto } from "./dto/create-auth.dto";
 
 @Controller("auth")
 export class AuthController {
@@ -39,13 +40,23 @@ export class AuthController {
   }
 
   @Get("me")
-  @UseGuards(AuthGuard("jwt"))
+  @UseGuards(CombinedAuthGuard)
   async getProfile(@Req() req: any) {
     return this.authService.getProfile(req.user.userId);
   }
 
+  @Patch("me")
+  @UseGuards(CombinedAuthGuard)
+  async updateProfile(@Req() req: any, @Body() body: unknown) {
+    const parsed = UpdateProfileDto.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.flatten().fieldErrors);
+    }
+    return this.authService.updateProfile(req.user.userId, parsed.data);
+  }
+
   @Post("keys/regenerate")
-  @UseGuards(AuthGuard("jwt"))
+  @UseGuards(CombinedAuthGuard)
   @HttpCode(200)
   async regenerateApiKey(@Req() req: any) {
     return this.authService.regenerateApiKey(req.user.userId);

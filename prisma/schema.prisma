@@ -12,10 +12,38 @@ datasource db {
 model User {
   id            String         @id @default(uuid())
   email         String         @unique
-  password      String
-  balance       Decimal        @default(0) @db.Decimal(12, 6)
+  emailVerified Boolean        @default(false) @map("email_verified")
+  password      String?        // Nullable — SSO users won't have a password
+
+  // Profile fields
+  name          String?
+  firstName     String?        @map("first_name")
+  lastName      String?        @map("last_name")
+  avatar        String?        // URL to profile picture
+  phone         String?
+  company       String?
+  jobTitle      String?        @map("job_title")
+  timezone      String?        @default("UTC")
+  locale        String?        @default("en")
+
+  // Auth
   apiKey        String         @unique @default(uuid())
+  lastLoginAt   DateTime?      @map("last_login_at") @db.Timestamptz()
+  lastLoginIp   String?        @map("last_login_ip")
+
+  // Status
+  status        String         @default("active") // "active" | "suspended" | "deleted"
+
+  // Billing
+  balance       Decimal        @default(0) @db.Decimal(12, 6)
+
+  // Better Auth relations
+  accounts      Account[]
+  sessions      Session[]
+
+  // Existing relations
   createdAt     DateTime       @default(now()) @db.Timestamptz()
+  updatedAt     DateTime       @updatedAt @db.Timestamptz()
   usageLogs     UsageLog[]
   transactions  Transaction[]
   conversations Conversation[]
@@ -23,7 +51,8 @@ model User {
   portalSessions PortalSession[]
   memories      UserMemory[]
   agents        Agent[]
-  agentSubscription AgentSubscription?
+  subscription  UserSubscription?
+  codeRedemptions CodeRedemption[]
   channels      Channel[]
   ownedWorkspaces    Workspace[]        @relation("WorkspaceOwner")
   workspaceMemberships WorkspaceMember[]
@@ -359,23 +388,161 @@ model AgentMessage {
   @@map("agent_messages")
 }
 
-model AgentSubscription {
-  id                 String   @id @default(uuid())
-  userId             String   @unique
-  user               User     @relation(fields: [userId], references: [id])
-  tier               String   // "starter" | "pro" | "enterprise"
-  maxWorkspaceUsers  Int?     @map("max_workspace_users")
-  status             String   @default("active") // "active" | "canceled" | "past_due" | "expired"
-  currentPeriodStart DateTime @map("current_period_start") @db.Timestamptz()
-  currentPeriodEnd   DateTime @map("current_period_end") @db.Timestamptz()
-  messagesUsed       Int      @default(0) @map("messages_used")
-  tokensUsed         BigInt   @default(0) @map("tokens_used")
-  cancelAtPeriodEnd  Boolean  @default(false) @map("cancel_at_period_end")
-  createdAt          DateTime @default(now()) @db.Timestamptz()
-  updatedAt          DateTime @updatedAt @db.Timestamptz()
+model SubscriptionPlan {
+  id                String   @id @default(uuid())
+  slug              String   @unique // "starter" | "pro" | "enterprise" | custom
+  name              String   // "Starter Plan"
+  description       String?
+
+  // Limits
+  maxAgents         Int      @map("max_agents")
+  maxIntegrations   Int      @map("max_integrations")
+  maxWorkspaceUsers Int      @map("max_workspace_users")
+  maxTokensPerMonth BigInt   @map("max_tokens_per_month")
+  allowedChannels   String[] @map("allowed_channels") // ["web", "api", "whatsapp"]
+
+  // Pricing (for display, not billing — billing is via invitation codes)
+  priceMonthly      Decimal? @db.Decimal(10, 2) @map("price_monthly")
+  priceCurrency     String   @default("USD") @map("price_currency")
+
+  // Status
+  isActive          Boolean  @default(true) @map("is_active")
+  displayOrder      Int      @default(0) @map("display_order")
+
+  // Relations
+  invitationCodes   InvitationCode[]
+  userSubscriptions UserSubscription[]
+
+  createdAt         DateTime @default(now()) @db.Timestamptz()
+  updatedAt         DateTime @updatedAt @db.Timestamptz()
+
+  @@map("subscription_plans")
+}
+
+model UserSubscription {
+  id                 String           @id @default(uuid())
+  userId             String           @unique @map("user_id")
+  user               User             @relation(fields: [userId], references: [id])
+  planId             String           @map("plan_id")
+  plan               SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  status             String           @default("active") // "active" | "canceled" | "expired"
+  currentPeriodStart DateTime         @map("current_period_start") @db.Timestamptz()
+  currentPeriodEnd   DateTime         @map("current_period_end") @db.Timestamptz()
+
+  // Usage tracking
+  messagesUsed       Int              @default(0) @map("messages_used")
+  tokensUsed         BigInt           @default(0) @map("tokens_used")
+
+  cancelAtPeriodEnd  Boolean          @default(false) @map("cancel_at_period_end")
+  createdAt          DateTime         @default(now()) @db.Timestamptz()
+  updatedAt          DateTime         @updatedAt @db.Timestamptz()
 
   @@index([userId, status])
-  @@map("agent_subscriptions")
+  @@index([planId])
+  @@map("user_subscriptions")
+}
+
+// ─── Invitation Code System ─────────────────────────────────────────────────────
+
+model InvitationCode {
+  id              String    @id @default(uuid())
+  code            String    @unique // e.g. "PERF-XXXX-XXXX"
+  type            String    // "topup" | "subscription" | "both"
+
+  // Top-up reward
+  creditAmount    Decimal?  @db.Decimal(12, 6) @map("credit_amount")
+
+  // Subscription reward
+  planId          String?   @map("plan_id")
+  plan            SubscriptionPlan? @relation(fields: [planId], references: [id])
+  durationDays    Int?      @map("duration_days") // How many days the plan is granted
+
+  // Usage limits
+  maxRedemptions  Int       @default(1) @map("max_redemptions")
+  timesRedeemed   Int       @default(0) @map("times_redeemed")
+
+  // Validity (defaults to 2 months from creation)
+  expiresAt       DateTime  @default(dbgenerated("NOW() + INTERVAL '2 months'")) @map("expires_at") @db.Timestamptz()
+  isActive        Boolean   @default(true) @map("is_active")
+
+  // Tracking
+  createdById     String?   @map("created_by_id")
+  redemptions     CodeRedemption[]
+  createdAt       DateTime  @default(now()) @db.Timestamptz()
+  updatedAt       DateTime  @updatedAt @db.Timestamptz()
+
+  @@index([code])
+  @@index([isActive, expiresAt])
+  @@map("invitation_codes")
+}
+
+model CodeRedemption {
+  id              String         @id @default(uuid())
+  codeId          String         @map("code_id")
+  code            InvitationCode @relation(fields: [codeId], references: [id])
+  userId          String         @map("user_id")
+  user            User           @relation(fields: [userId], references: [id])
+
+  // What was granted
+  creditsGranted  Decimal?       @db.Decimal(12, 6) @map("credits_granted")
+  planGranted     String?        @map("plan_granted") // plan slug snapshot
+  daysGranted     Int?           @map("days_granted")
+
+  redeemedAt      DateTime       @default(now()) @map("redeemed_at") @db.Timestamptz()
+
+  @@unique([codeId, userId]) // Each user can redeem a code only once
+  @@index([userId])
+  @@map("code_redemptions")
+}
+
+// ─── Better Auth Tables ─────────────────────────────────────────────────────────
+
+model Account {
+  id                   String    @id @default(uuid())
+  userId               String    @map("user_id")
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId            String    @map("account_id")      // Provider's user ID
+  providerId           String    @map("provider_id")     // "google" | "github" | "credential"
+  accessToken          String?   @map("access_token")
+  refreshToken         String?   @map("refresh_token")
+  accessTokenExpiresAt DateTime? @map("access_token_expires_at") @db.Timestamptz()
+  scope                String?
+  idToken              String?   @map("id_token")
+  password             String?   // For credential provider (bcrypt hash)
+  createdAt            DateTime  @default(now()) @db.Timestamptz()
+  updatedAt            DateTime  @updatedAt @db.Timestamptz()
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  expiresAt DateTime @map("expires_at") @db.Timestamptz()
+  createdAt DateTime @default(now()) @db.Timestamptz()
+  updatedAt DateTime @updatedAt @db.Timestamptz()
+
+  @@index([userId])
+  @@index([token])
+  @@map("sessions")
+}
+
+model Verification {
+  id         String   @id @default(uuid())
+  identifier String   // email or phone
+  value      String   // token/code
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz()
+  createdAt  DateTime @default(now()) @db.Timestamptz()
+  updatedAt  DateTime @updatedAt @db.Timestamptz()
+
+  @@map("verifications")
 }
 
 // ─── Channels System (Discord-like) ───

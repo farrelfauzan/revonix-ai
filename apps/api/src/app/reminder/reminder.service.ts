@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
-import { ReminderStatus } from "../../generated/prisma/enums.js";
+import { ReminderStatus } from "@generated/prisma/client.js";
 import { CronExpressionParser } from "cron-parser";
 
 @Injectable()
@@ -35,9 +35,7 @@ export class ReminderService {
       });
       nextRunAt = interval.next().toDate();
     } catch (err: any) {
-      throw new BadRequestException(
-        `Invalid cron expression: ${err.message}`,
-      );
+      throw new BadRequestException(`Invalid cron expression: ${err.message}`);
     }
 
     // Verify the user owns the channel and agent is in the channel
@@ -124,7 +122,8 @@ export class ReminderService {
     const updateData: any = {};
 
     if (data.prompt !== undefined) updateData.prompt = data.prompt;
-    if (data.description !== undefined) updateData.description = data.description;
+    if (data.description !== undefined)
+      updateData.description = data.description;
     if (data.status !== undefined) updateData.status = data.status;
 
     // If cron or timezone changed, recompute nextRunAt
@@ -133,7 +132,9 @@ export class ReminderService {
       const timezone = data.timezone || reminder.timezone;
 
       try {
-        const interval = CronExpressionParser.parse(cronExpression, { tz: timezone });
+        const interval = CronExpressionParser.parse(cronExpression, {
+          tz: timezone,
+        });
         updateData.nextRunAt = interval.next().toDate();
         updateData.cronExpression = cronExpression;
         updateData.timezone = timezone;
@@ -189,7 +190,9 @@ export class ReminderService {
   }
 
   async markExecuted(id: string, cronExpression: string, timezone: string) {
-    const interval = CronExpressionParser.parse(cronExpression, { tz: timezone });
+    const interval = CronExpressionParser.parse(cronExpression, {
+      tz: timezone,
+    });
     const nextRunAt = interval.next().toDate();
 
     return this.prisma.reminder.update({

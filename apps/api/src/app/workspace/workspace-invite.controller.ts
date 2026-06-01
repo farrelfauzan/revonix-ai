@@ -9,7 +9,7 @@ import {
   HttpCode,
   BadRequestException,
 } from "@nestjs/common";
-import { AuthGuard } from "@nestjs/passport";
+import { CombinedAuthGuard } from "../guards/combined-auth.guard";
 import { WorkspaceInviteService } from "./workspace-invite.service";
 import { AcceptInviteSchema } from "./dto/accept-invite.dto";
 
@@ -27,7 +27,7 @@ export class WorkspaceInviteController {
 
   @Post("accept")
   @HttpCode(200)
-  @UseGuards(AuthGuard("jwt"))
+  @UseGuards(CombinedAuthGuard)
   async acceptInvite(@Body() body: unknown, @Req() req: any) {
     const parsed = AcceptInviteSchema.safeParse(body);
     if (!parsed.success) {

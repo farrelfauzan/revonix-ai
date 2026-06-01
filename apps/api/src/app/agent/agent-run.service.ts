@@ -1266,8 +1266,9 @@ export class AgentRunService {
 
   private async checkAndDeductQuota(userId: string) {
     return this.prisma.$transaction(async (tx) => {
-      const subscription = await tx.agentSubscription.findUnique({
+      const subscription = await tx.userSubscription.findUnique({
         where: { userId },
+        include: { plan: true },
       });
 
       if (!subscription || subscription.status !== "active") {
@@ -1276,14 +1277,7 @@ export class AgentRunService {
         );
       }
 
-      // Token-based limits per tier (monthly)
-      const tokenLimits: Record<string, bigint> = {
-        starter: BigInt(1_000_000), // 1M tokens
-        pro: BigInt(5_000_000), // 5M tokens
-        enterprise: BigInt(20_000_000), // 20M tokens
-      };
-
-      const maxTokens = tokenLimits[subscription.tier] ?? BigInt(1_000_000);
+      const maxTokens = BigInt(subscription.plan.maxTokensPerMonth);
 
       if (BigInt(subscription.tokensUsed) >= maxTokens) {
         // Check if user has credit balance for overage
@@ -1299,8 +1293,8 @@ export class AgentRunService {
         }
       }
 
-      // Increment message count for tracking (backward compat)
-      await tx.agentSubscription.update({
+      // Increment message count for tracking
+      await tx.userSubscription.update({
         where: { userId },
         data: { messagesUsed: { increment: 1 } },
       });
@@ -1316,7 +1310,7 @@ export class AgentRunService {
   private async deductTokenQuota(userId: string, tokensUsed: number) {
     if (tokensUsed <= 0) return;
 
-    await this.prisma.agentSubscription.update({
+    await this.prisma.userSubscription.update({
       where: { userId },
       data: { tokensUsed: { increment: tokensUsed } },
     });

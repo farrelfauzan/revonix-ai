@@ -13,7 +13,7 @@ import {
   BadRequestException,
 } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
-import { AuthGuard } from "@nestjs/passport";
+import { CombinedAuthGuard } from "../guards/combined-auth.guard";
 import { WorkspaceService } from "./workspace.service";
 import { WorkspaceMemberService } from "./workspace-member.service";
 import { WorkspaceInviteService } from "./workspace-invite.service";
@@ -24,7 +24,7 @@ import { InviteMemberSchema } from "./dto/invite-member.dto";
 import { UpdateMemberSchema } from "./dto/update-member.dto";
 
 @Controller("workspaces")
-@UseGuards(AuthGuard("jwt"))
+@UseGuards(CombinedAuthGuard)
 export class WorkspaceController {
   constructor(
     private readonly workspaceService: WorkspaceService,

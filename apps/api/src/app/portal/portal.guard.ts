@@ -6,6 +6,7 @@ import {
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { PrismaService } from "../prisma/prisma.service";
+import { auth } from "../../lib/auth";
 
 export interface PortalIdentity {
   sessionId: string;
@@ -33,7 +34,7 @@ export class PortalGuard implements CanActivate {
       throw new BadRequestException("Missing X-Portal-Session header");
     }
 
-    // 2. Try to extract JWT (optional)
+    // 2. Try to extract user identity (JWT or Better Auth session)
     const authHeader = request.headers.authorization;
     let user: PortalIdentity["user"] | undefined;
 
@@ -57,6 +58,37 @@ export class PortalGuard implements CanActivate {
         } catch {
           // Invalid JWT — treat as anonymous (free tier)
         }
+      }
+    }
+
+    // 2b. If no JWT user, try Better Auth cookie session
+    if (!user && request.headers.cookie) {
+      try {
+        const headers = new Headers();
+        for (const [key, value] of Object.entries(request.headers)) {
+          if (value) {
+            headers.set(
+              key,
+              Array.isArray(value) ? value.join(", ") : String(value),
+            );
+          }
+        }
+        const session = await auth.api.getSession({ headers });
+        if (session?.user) {
+          const dbUser = await this.prisma.user.findUnique({
+            where: { id: session.user.id },
+            select: { id: true, email: true, balance: true },
+          });
+          if (dbUser) {
+            user = {
+              id: dbUser.id,
+              email: dbUser.email,
+              balance: Number(dbUser.balance),
+            };
+          }
+        }
+      } catch {
+        // Invalid session — treat as anonymous
       }
     }
 

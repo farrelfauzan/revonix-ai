@@ -13,9 +13,9 @@ import {
   BadRequestException,
 } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
-import { AuthGuard } from "@nestjs/passport";
+import { CombinedAuthGuard } from "../guards/combined-auth.guard";
 import { ReminderService } from "./reminder.service";
-import { ReminderStatus } from "../../generated/prisma/enums.js";
+import { ReminderStatus } from "@generated/prisma/client.js";
 import { z } from "zod";
 
 const CreateReminderSchema = z.object({
@@ -37,7 +37,7 @@ const UpdateReminderSchema = z.object({
 });
 
 @Controller("reminders")
-@UseGuards(AuthGuard("jwt"))
+@UseGuards(CombinedAuthGuard)
 export class ReminderController {
   constructor(private readonly reminderService: ReminderService) {}
 
@@ -88,7 +88,9 @@ export class ReminderController {
     const data: any = { ...parsed.data };
     if (data.status) {
       data.status =
-        data.status === "ACTIVE" ? ReminderStatus.ACTIVE : ReminderStatus.PAUSED;
+        data.status === "ACTIVE"
+          ? ReminderStatus.ACTIVE
+          : ReminderStatus.PAUSED;
     }
 
     return this.reminderService.update(req.user.userId, id, data);

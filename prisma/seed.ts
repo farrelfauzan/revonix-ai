@@ -890,6 +890,97 @@ Rules:
     console.log(`  ✓ ${template.slug}`);
   }
 
+  // ─── Seed Subscription Plans ───
+  console.log("Seeding subscription plans...");
+
+  const plans = [
+    {
+      slug: "starter",
+      name: "Starter",
+      description: "For individuals getting started with AI agents",
+      maxAgents: 3,
+      maxIntegrations: 1,
+      maxWorkspaceUsers: 3,
+      maxTokensPerMonth: BigInt(1_000_000),
+      allowedChannels: ["web"],
+      priceMonthly: 19,
+      priceCurrency: "USD",
+      displayOrder: 1,
+    },
+    {
+      slug: "pro",
+      name: "Pro",
+      description: "For professionals and small teams",
+      maxAgents: 10,
+      maxIntegrations: 3,
+      maxWorkspaceUsers: 10,
+      maxTokensPerMonth: BigInt(10_000_000),
+      allowedChannels: ["web", "api"],
+      priceMonthly: 49,
+      priceCurrency: "USD",
+      displayOrder: 2,
+    },
+    {
+      slug: "enterprise",
+      name: "Enterprise",
+      description: "For large teams with unlimited needs",
+      maxAgents: 999,
+      maxIntegrations: 999,
+      maxWorkspaceUsers: 100,
+      maxTokensPerMonth: BigInt(100_000_000),
+      allowedChannels: ["web", "api", "whatsapp"],
+      priceMonthly: 149,
+      priceCurrency: "USD",
+      displayOrder: 3,
+    },
+  ];
+
+  for (const plan of plans) {
+    await prisma.subscriptionPlan.upsert({
+      where: { slug: plan.slug },
+      update: plan,
+      create: plan,
+    });
+    console.log(`  ✓ ${plan.slug} plan`);
+  }
+
+  // ─── Invitation Codes ───
+  console.log("Seeding invitation codes...");
+
+  const starterPlan = await prisma.subscriptionPlan.findUnique({
+    where: { slug: "starter" },
+  });
+
+  function generateCode(index: number): string {
+    const hex = (index + 1).toString(16).toUpperCase().padStart(4, "0");
+    const suffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+    return `PERF-${hex}-${suffix}`;
+  }
+
+  const codes = Array.from({ length: 50 }, (_, i) => ({
+    code: generateCode(i),
+    type: "both",
+    creditAmount: 5.0,
+    planId: starterPlan?.id ?? null,
+    durationDays: 30,
+    maxRedemptions: 1,
+    timesRedeemed: 0,
+    isActive: true,
+  }));
+
+  for (const code of codes) {
+    await prisma.invitationCode.upsert({
+      where: { code: code.code },
+      update: {},
+      create: code,
+    });
+  }
+  console.log(`  ✓ ${codes.length} invitation codes created`);
+  console.log("  Codes:");
+  for (const code of codes) {
+    console.log(`    ${code.code}`);
+  }
+
   console.log("Done!");
 }
 

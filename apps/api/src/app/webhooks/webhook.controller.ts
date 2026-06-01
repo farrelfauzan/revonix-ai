@@ -44,6 +44,13 @@ export class WebhookController {
 
   @Post("stripe")
   async handleStripeWebhook(@Req() req: any) {
+    if (
+      !this.configService.get<string>("STRIPE_ENABLED") ||
+      this.configService.get<string>("STRIPE_ENABLED") === "false"
+    ) {
+      return { received: false, reason: "Stripe is disabled" };
+    }
+
     this.logger.log("Stripe webhook hit");
 
     if (!this.stripe || !this.webhookSecret) {
