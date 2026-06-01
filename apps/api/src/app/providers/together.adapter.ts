@@ -184,40 +184,57 @@ export class TogetherAdapter implements ProviderAdapter {
     const stream = response.data as NodeJS.ReadableStream;
     let buffer = "";
     let chunkCount = 0;
+    let completed = false;
 
     this.logger.log(
       `[Together chatStream] Stream connected, waiting for data...`,
     );
 
     stream.on("error", (err: any) => {
-      this.logger.error(
+      // After a successful return/completion, Node destroys the stream which
+      // fires "aborted". This is expected and can be safely ignored.
+      if (completed) return;
+      this.logger.warn(
         `[Together chatStream] Stream error event: ${err.message}`,
       );
     });
 
-    for await (const chunk of stream) {
-      chunkCount++;
-      if (chunkCount === 1) {
-        this.logger.log(
-          `[Together chatStream] First chunk received (${chunk.toString().length} bytes)`,
-        );
-      }
-      buffer += chunk.toString();
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith("data: ")) continue;
-        const payload = trimmed.slice(6);
-        if (payload === "[DONE]") {
+    try {
+      for await (const chunk of stream) {
+        chunkCount++;
+        if (chunkCount === 1) {
           this.logger.log(
-            `[Together chatStream] Stream complete (${chunkCount} chunks)`,
+            `[Together chatStream] First chunk received (${chunk.toString().length} bytes)`,
           );
-          return;
         }
-        yield payload;
+        buffer += chunk.toString();
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith("data: ")) continue;
+          const payload = trimmed.slice(6);
+          if (payload === "[DONE]") {
+            this.logger.log(
+              `[Together chatStream] Stream complete (${chunkCount} chunks)`,
+            );
+            completed = true;
+            return;
+          }
+          yield payload;
+        }
       }
+    } catch (err: any) {
+      // Handle "aborted" errors gracefully — the client likely disconnected
+      if (err.message === "aborted" || err.code === "ECONNRESET") {
+        completed = true;
+        this.logger.warn(
+          `[Together chatStream] Stream aborted after ${chunkCount} chunks (client likely disconnected)`,
+        );
+        return;
+      }
+      throw err;
     }
 
     this.logger.log(
