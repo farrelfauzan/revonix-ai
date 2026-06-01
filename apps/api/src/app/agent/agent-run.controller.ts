@@ -14,7 +14,7 @@ import {
   Logger,
 } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
-import { AuthGuard } from "@nestjs/passport";
+import { CombinedAuthGuard } from "../guards/combined-auth.guard";
 import type { FastifyReply } from "fastify";
 import { AgentRunService } from "./agent-run.service";
 import { AgentChatSchema } from "./dto/agent-chat.dto";
@@ -22,7 +22,7 @@ import { DocumentService } from "../document/document.service";
 import { ProviderRouter } from "../providers/provider-router";
 
 @Controller("agents")
-@UseGuards(AuthGuard("jwt"))
+@UseGuards(CombinedAuthGuard)
 export class AgentRunController {
   private readonly logger = new Logger(AgentRunController.name);
 

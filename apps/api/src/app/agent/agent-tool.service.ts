@@ -499,7 +499,9 @@ export class AgentToolService {
     const timezone = args.timezone || "UTC";
     let nextRunAt: Date;
     try {
-      const interval = CronExpressionParser.parse(args.cronExpression, { tz: timezone });
+      const interval = CronExpressionParser.parse(args.cronExpression, {
+        tz: timezone,
+      });
       nextRunAt = interval.next().toDate();
     } catch (err: any) {
       return `Error: Invalid cron expression "${args.cronExpression}". ${err.message}`;

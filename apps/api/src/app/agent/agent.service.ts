@@ -400,6 +400,12 @@ export class AgentService {
         description: "Delegate a task to a sub-agent",
         configRequired: true,
       },
+      {
+        type: "create_reminder",
+        name: "Create Reminder",
+        description: "Schedule automated messages on a recurring basis",
+        configRequired: false,
+      },
     ];
   }
 
@@ -523,8 +529,9 @@ export class AgentService {
   // ─── Subscription ───
 
   async getSubscription(userId: string) {
-    const subscription = await this.prisma.agentSubscription.findUnique({
+    const subscription = await this.prisma.userSubscription.findUnique({
       where: { userId },
+      include: { plan: true },
     });
     if (!subscription) {
       return { subscription: null };
@@ -534,60 +541,79 @@ export class AgentService {
       subscription: {
         ...subscription,
         tokensUsed: subscription.tokensUsed.toString(),
+        plan: {
+          ...subscription.plan,
+          maxTokensPerMonth: subscription.plan.maxTokensPerMonth.toString(),
+          priceMonthly: subscription.plan.priceMonthly
+            ? Number(subscription.plan.priceMonthly)
+            : null,
+        },
       },
     };
   }
 
   async subscribe(userId: string, tier: string) {
-    const pricing: Record<string, number> = {
-      starter: 19,
-      pro: 49,
-      enterprise: 149,
-    };
-
-    const price = pricing[tier];
-    if (!price) throw new BadRequestException("Invalid tier");
+    const plan = await this.prisma.subscriptionPlan.findUnique({
+      where: { slug: tier },
+    });
+    if (!plan) throw new BadRequestException("Invalid plan tier");
 
     // Check if user already has active subscription
-    const existing = await this.prisma.agentSubscription.findUnique({
+    const existing = await this.prisma.userSubscription.findUnique({
       where: { userId },
     });
 
     if (existing && existing.status === "active") {
       // Upgrade/downgrade
-      const updated = await this.prisma.agentSubscription.update({
+      const updated = await this.prisma.userSubscription.update({
         where: { userId },
         data: {
-          tier,
+          planId: plan.id,
           currentPeriodStart: new Date(),
           currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
           messagesUsed: 0,
           tokensUsed: 0,
         },
+        include: { plan: true },
       });
       return {
         subscription: {
           ...updated,
           tokensUsed: updated.tokensUsed.toString(),
+          plan: {
+            ...updated.plan,
+            maxTokensPerMonth: updated.plan.maxTokensPerMonth.toString(),
+            priceMonthly: updated.plan.priceMonthly
+              ? Number(updated.plan.priceMonthly)
+              : null,
+          },
         },
       };
     }
 
     // Create new subscription
-    const subscription = await this.prisma.agentSubscription.create({
+    const subscription = await this.prisma.userSubscription.create({
       data: {
         userId,
-        tier,
+        planId: plan.id,
         status: "active",
         currentPeriodStart: new Date(),
         currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       },
+      include: { plan: true },
     });
 
     return {
       subscription: {
         ...subscription,
         tokensUsed: subscription.tokensUsed.toString(),
+        plan: {
+          ...subscription.plan,
+          maxTokensPerMonth: subscription.plan.maxTokensPerMonth.toString(),
+          priceMonthly: subscription.plan.priceMonthly
+            ? Number(subscription.plan.priceMonthly)
+            : null,
+        },
       },
     };
   }
@@ -630,8 +656,9 @@ export class AgentService {
   }
 
   private async checkSubscription(userId: string) {
-    const subscription = await this.prisma.agentSubscription.findUnique({
+    const subscription = await this.prisma.userSubscription.findUnique({
       where: { userId },
+      include: { plan: true },
     });
 
     if (!subscription || subscription.status !== "active") {
@@ -644,67 +671,52 @@ export class AgentService {
   }
 
   private async checkAgentLimit(userId: string) {
-    const subscription = await this.prisma.agentSubscription.findUnique({
+    const subscription = await this.prisma.userSubscription.findUnique({
       where: { userId },
+      include: { plan: true },
     });
     if (!subscription) return;
 
-    const limits: Record<string, number> = {
-      starter: 3,
-      pro: 10,
-      enterprise: Infinity,
-    };
-
-    const maxAgents = limits[subscription.tier] ?? 3;
+    const maxAgents = subscription.plan.maxAgents;
     const count = await this.prisma.agent.count({ where: { userId } });
 
     if (count >= maxAgents) {
       throw new BadRequestException(
-        `Agent limit reached for your ${subscription.tier} plan (${maxAgents} agents). Please upgrade to create more.`,
+        `Agent limit reached for your ${subscription.plan.name} plan (${maxAgents} agents). Please upgrade to create more.`,
       );
     }
   }
 
   private async checkIntegrationLimit(userId: string, agentId: string) {
-    const subscription = await this.prisma.agentSubscription.findUnique({
+    const subscription = await this.prisma.userSubscription.findUnique({
       where: { userId },
+      include: { plan: true },
     });
     if (!subscription) return;
 
-    const limits: Record<string, number> = {
-      starter: 1,
-      pro: 3,
-      enterprise: Infinity,
-    };
-
-    const max = limits[subscription.tier] ?? 1;
+    const max = subscription.plan.maxIntegrations;
     const count = await this.prisma.agentIntegration.count({
       where: { agentId },
     });
 
     if (count >= max) {
       throw new BadRequestException(
-        `Integration limit reached for your ${subscription.tier} plan. Please upgrade.`,
+        `Integration limit reached for your ${subscription.plan.name} plan. Please upgrade.`,
       );
     }
   }
 
   private async checkChannelAccess(userId: string, channelType: string) {
-    const subscription = await this.prisma.agentSubscription.findUnique({
+    const subscription = await this.prisma.userSubscription.findUnique({
       where: { userId },
+      include: { plan: true },
     });
     if (!subscription) return;
 
-    const channelAccess: Record<string, string[]> = {
-      starter: ["web"],
-      pro: ["web", "api"],
-      enterprise: ["web", "api", "whatsapp"],
-    };
-
-    const allowed = channelAccess[subscription.tier] ?? ["web"];
+    const allowed = subscription.plan.allowedChannels;
     if (!allowed.includes(channelType)) {
       throw new ForbiddenException(
-        `${channelType} channel is not available on your ${subscription.tier} plan. Please upgrade.`,
+        `${channelType} channel is not available on your ${subscription.plan.name} plan. Please upgrade.`,
       );
     }
   }

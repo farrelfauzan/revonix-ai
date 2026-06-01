@@ -17,6 +17,7 @@ export const AttachToolSchema = z.object({
     "knowledge_retrieval",
     "memory_store",
     "delegate_to_subagent",
+    "create_reminder",
   ]),
   config: z.record(z.any()).optional(),
   enabled: z.boolean().optional().default(true),
