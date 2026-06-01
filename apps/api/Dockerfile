@@ -5,6 +5,8 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 
+RUN apk add --no-cache dumb-init
+
 COPY package.json ./
 COPY apps/api/package.json ./apps/api/
 COPY prisma/schema.prisma ./prisma/schema.prisma
@@ -28,18 +30,30 @@ COPY . .
 
 RUN cd apps/api && npx webpack-cli build --config webpack.docker.config.js
 
-# ─── Stage 4: Production ───
+# ─── Stage 4: Production (Hardened) ───
 FROM node:22-alpine
+
+RUN apk add --no-cache dumb-init
 
 WORKDIR /app
 ENV NODE_ENV=production
 
-COPY --from=builder /app/apps/api/dist ./dist
-COPY --from=prisma /app/node_modules ./node_modules
-COPY --from=prisma /app/prisma ./prisma
-COPY --from=prisma /app/prisma.config.ts ./prisma.config.ts
-COPY --from=prisma /app/package.json ./package.json
+# Create non-root user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 --ingroup nodejs appuser
+
+COPY --from=builder --chown=appuser:nodejs /app/apps/api/dist ./dist
+COPY --from=prisma --chown=appuser:nodejs /app/node_modules ./node_modules
+COPY --from=prisma --chown=appuser:nodejs /app/prisma ./prisma
+COPY --from=prisma --chown=appuser:nodejs /app/prisma.config.ts ./prisma.config.ts
+COPY --from=prisma --chown=appuser:nodejs /app/package.json ./package.json
+
+USER appuser
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
 
 EXPOSE 3000
 
+ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "dist/main.js"]
