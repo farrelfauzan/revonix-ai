@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
-import { ReminderStatus } from "../../generated/prisma";
+import { ReminderStatus } from "../../generated/prisma/enums.js";
 import { CronExpressionParser } from "cron-parser";
 
 @Injectable()

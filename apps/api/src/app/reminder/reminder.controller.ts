@@ -15,7 +15,7 @@ import {
 import { Throttle } from "@nestjs/throttler";
 import { AuthGuard } from "@nestjs/passport";
 import { ReminderService } from "./reminder.service";
-import { ReminderStatus } from "../../generated/prisma";
+import { ReminderStatus } from "../../generated/prisma/enums.js";
 import { z } from "zod";
 
 const CreateReminderSchema = z.object({
