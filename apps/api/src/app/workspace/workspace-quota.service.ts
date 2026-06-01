@@ -5,19 +5,14 @@ import {
 } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 
-const TIER_SEAT_LIMITS: Record<string, number> = {
-  starter: 3,
-  pro: 10,
-  enterprise: 100,
-};
-
 @Injectable()
 export class WorkspaceQuotaService {
   constructor(private readonly prisma: PrismaService) {}
 
   async requireSubscription(userId: string) {
-    const subscription = await this.prisma.agentSubscription.findUnique({
+    const subscription = await this.prisma.userSubscription.findUnique({
       where: { userId },
+      include: { plan: true },
     });
 
     if (!subscription || subscription.status !== "active") {
@@ -30,20 +25,16 @@ export class WorkspaceQuotaService {
   }
 
   async getMaxUsers(workspaceOwnerId: string): Promise<number> {
-    const subscription = await this.prisma.agentSubscription.findUnique({
+    const subscription = await this.prisma.userSubscription.findUnique({
       where: { userId: workspaceOwnerId },
+      include: { plan: true },
     });
 
     if (!subscription || subscription.status !== "active") {
       return 0;
     }
 
-    // Use explicit value if set, otherwise use tier defaults
-    if (subscription.maxWorkspaceUsers != null) {
-      return subscription.maxWorkspaceUsers;
-    }
-
-    return TIER_SEAT_LIMITS[subscription.tier] ?? 3;
+    return subscription.plan.maxWorkspaceUsers;
   }
 
   async getActiveCount(workspaceId: string): Promise<number> {

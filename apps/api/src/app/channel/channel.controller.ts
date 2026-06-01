@@ -16,7 +16,7 @@ import {
   Logger,
 } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
-import { AuthGuard } from "@nestjs/passport";
+import { CombinedAuthGuard } from "../guards/combined-auth.guard";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { ChannelService } from "./channel.service";
 import { ChannelChatService } from "./channel-chat.service";
@@ -48,7 +48,7 @@ const ChatMessageSchema = z.object({
 });
 
 @Controller("channels")
-@UseGuards(AuthGuard("jwt"))
+@UseGuards(CombinedAuthGuard)
 export class ChannelController {
   private readonly logger = new Logger(ChannelController.name);
 

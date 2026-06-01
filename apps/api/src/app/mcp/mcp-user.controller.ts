@@ -11,7 +11,7 @@ import {
   UseGuards,
   BadRequestException,
 } from "@nestjs/common";
-import { AuthGuard } from "@nestjs/passport";
+import { CombinedAuthGuard } from "../guards/combined-auth.guard";
 import { ConfigService } from "@nestjs/config";
 import type { FastifyReply } from "fastify";
 import { McpUserService } from "./mcp-user.service";
@@ -33,7 +33,7 @@ export class McpUserController {
    * Returns an auth URL to redirect the user to.
    */
   @Get("oauth/start")
-  @UseGuards(AuthGuard("jwt"))
+  @UseGuards(CombinedAuthGuard)
   async startOAuth(
     @Req() req: any,
     @Query("provider") provider: string,
@@ -94,13 +94,20 @@ export class McpUserController {
    * Connect a token-based MCP provider (e.g., Notion with API key).
    */
   @Post("connect")
-  @UseGuards(AuthGuard("jwt"))
+  @UseGuards(CombinedAuthGuard)
   async connectWithToken(
     @Req() req: any,
-    @Body() body: { provider: string; workspaceId: string; env: Record<string, string> },
+    @Body()
+    body: {
+      provider: string;
+      workspaceId: string;
+      env: Record<string, string>;
+    },
   ) {
     if (!body.provider || !body.workspaceId || !body.env) {
-      throw new BadRequestException("provider, workspaceId, and env are required");
+      throw new BadRequestException(
+        "provider, workspaceId, and env are required",
+      );
     }
     return this.mcpUserService.connectWithToken(
       req.user.userId,
@@ -114,7 +121,7 @@ export class McpUserController {
    * List current user's connected credentials for a workspace.
    */
   @Get("credentials")
-  @UseGuards(AuthGuard("jwt"))
+  @UseGuards(CombinedAuthGuard)
   async listCredentials(
     @Req() req: any,
     @Query("workspaceId") workspaceId: string,
@@ -129,7 +136,7 @@ export class McpUserController {
    * Disconnect (revoke) a provider for the current user.
    */
   @Delete("credentials/:provider")
-  @UseGuards(AuthGuard("jwt"))
+  @UseGuards(CombinedAuthGuard)
   async disconnect(
     @Req() req: any,
     @Param("provider") provider: string,

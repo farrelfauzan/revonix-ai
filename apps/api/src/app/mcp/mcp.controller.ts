@@ -7,11 +7,11 @@ import {
   Req,
   UseGuards,
 } from "@nestjs/common";
-import { AuthGuard } from "@nestjs/passport";
+import { CombinedAuthGuard } from "../guards/combined-auth.guard";
 import { McpService } from "./mcp.service";
 
 @Controller("mcp")
-@UseGuards(AuthGuard("jwt"))
+@UseGuards(CombinedAuthGuard)
 export class McpController {
   constructor(private readonly mcpService: McpService) {}
 
