@@ -28,6 +28,7 @@ import { PromptTuningService } from "../chat/prompt-tuning.service";
 import { ConversationService } from "../chat/conversation.service";
 import { KnowledgeService } from "../knowledge/knowledge.service";
 import { GuardrailService } from "../guardrail/guardrail.service";
+import { DocumentService } from "../document/document.service";
 import {
   ChatCompletionRequest,
   ChatCompletionRequestSchema,
@@ -52,6 +53,7 @@ export class PortalController {
     private readonly conversation: ConversationService,
     private readonly knowledge: KnowledgeService,
     private readonly guardrail: GuardrailService,
+    private readonly documentService: DocumentService,
   ) {}
 
   @Post("completions")
@@ -426,24 +428,37 @@ export class PortalController {
       res.raw.write(`data: ${JSON.stringify({ status: "understanding" })}\n\n`);
 
       // Apply prompt tuning
-      const { tunedMessages } = await this.promptTuning.applyTuning(
-        body.messages,
-      );
+      const { tunedMessages, matchedTemplate } =
+        await this.promptTuning.applyTuning(body.messages);
 
-      // Emit status: generating
-      res.raw.write(`data: ${JSON.stringify({ status: "generating" })}\n\n`);
+      // Determine if document generation is needed
+      const outputFormat =
+        body.output_format || matchedTemplate?.outputFormat || null;
+
+      if (outputFormat) {
+        res.raw.write(
+          `data: ${JSON.stringify({ status: "generating_document" })}\n\n`,
+        );
+      } else {
+        // Emit status: generating
+        res.raw.write(`data: ${JSON.stringify({ status: "generating" })}\n\n`);
+      }
 
       const stream = this.providerRouter.chatStream(cheapest.provider, {
         model: cheapest.slug,
         providerId: cheapest.providerId,
         messages: tunedMessages,
         temperature: body.temperature,
-        max_tokens: body.max_tokens ?? 4096,
+        max_tokens: outputFormat
+          ? Math.max(body.max_tokens ?? 4096, 8192)
+          : (body.max_tokens ?? 4096),
       });
 
       let fullContent = "";
       for await (const chunk of stream) {
-        res.raw.write(`data: ${chunk}\n\n`);
+        if (!outputFormat) {
+          res.raw.write(`data: ${chunk}\n\n`);
+        }
         // Accumulate content for conversation saving
         try {
           const parsed = JSON.parse(chunk);
@@ -451,6 +466,44 @@ export class PortalController {
           if (delta) fullContent += delta;
         } catch {
           // ignore parse errors
+        }
+      }
+
+      // Generate document if format was detected
+      if (outputFormat && fullContent) {
+        try {
+          const document = await this.documentService.generateWithStorage(
+            fullContent,
+            outputFormat,
+            this.extractFilenameHint(body.messages),
+          );
+
+          const formatLabels: Record<string, string> = {
+            pdf: "PDF",
+            docx: "Word document",
+            xlsx: "Excel spreadsheet",
+          };
+          const label =
+            formatLabels[outputFormat] || outputFormat.toUpperCase();
+          const summary = `Here's the ${label} you requested:`;
+          const chunk = JSON.stringify({
+            choices: [{ delta: { content: summary } }],
+          });
+          res.raw.write(`data: ${chunk}\n\n`);
+          res.raw.write(
+            `data: ${JSON.stringify({ document: { format: document.format, url: document.url, filename: document.filename, expiresAt: document.expiresAt } })}\n\n`,
+          );
+
+          fullContent = summary;
+        } catch (err: any) {
+          this.logger.error(
+            `Portal document generation (free) failed: ${err.message}`,
+            err.stack,
+          );
+          const chunk = JSON.stringify({
+            choices: [{ delta: { content: fullContent } }],
+          });
+          res.raw.write(`data: ${chunk}\n\n`);
         }
       }
 
@@ -596,24 +649,37 @@ export class PortalController {
       }
 
       // Apply prompt tuning (with user KB context)
-      const { tunedMessages } = await this.promptTuning.applyTuning(
-        body.messages,
-        user.id,
-      );
+      const { tunedMessages, matchedTemplate } =
+        await this.promptTuning.applyTuning(body.messages, user.id);
 
-      // Emit status: generating
-      res.raw.write(`data: ${JSON.stringify({ status: "generating" })}\n\n`);
+      // Determine if document generation is needed
+      const outputFormat =
+        body.output_format || matchedTemplate?.outputFormat || null;
+
+      if (outputFormat) {
+        res.raw.write(
+          `data: ${JSON.stringify({ status: "generating_document" })}\n\n`,
+        );
+      } else {
+        // Emit status: generating
+        res.raw.write(`data: ${JSON.stringify({ status: "generating" })}\n\n`);
+      }
 
       const stream = this.providerRouter.chatStream(modelConfig.provider, {
         model: body.model,
         providerId: modelConfig.providerId,
         messages: tunedMessages,
         temperature: body.temperature,
-        max_tokens: body.max_tokens ?? 4096,
+        max_tokens: outputFormat
+          ? Math.max(body.max_tokens ?? 4096, 8192)
+          : (body.max_tokens ?? 4096),
       });
 
       for await (const chunk of stream) {
-        res.raw.write(`data: ${chunk}\n\n`);
+        // When generating a document, don't stream raw content to frontend
+        if (!outputFormat) {
+          res.raw.write(`data: ${chunk}\n\n`);
+        }
 
         // Accumulate content for conversation saving
         try {
@@ -623,6 +689,47 @@ export class PortalController {
           if (parsed.usage) totalUsage = parsed.usage;
         } catch {
           // ignore parse errors on individual chunks
+        }
+      }
+
+      // Generate document if format was detected
+      if (outputFormat && fullContent) {
+        try {
+          const document = await this.documentService.generateWithStorage(
+            fullContent,
+            outputFormat,
+            this.extractFilenameHint(body.messages),
+          );
+
+          // Send a short summary message
+          const formatLabels: Record<string, string> = {
+            pdf: "PDF",
+            docx: "Word document",
+            xlsx: "Excel spreadsheet",
+          };
+          const label =
+            formatLabels[outputFormat] || outputFormat.toUpperCase();
+          const summary = `Here's the ${label} you requested:`;
+          const chunk = JSON.stringify({
+            choices: [{ delta: { content: summary } }],
+          });
+          res.raw.write(`data: ${chunk}\n\n`);
+          res.raw.write(
+            `data: ${JSON.stringify({ document: { format: document.format, url: document.url, filename: document.filename, expiresAt: document.expiresAt } })}\n\n`,
+          );
+
+          // Replace fullContent with summary for conversation saving
+          fullContent = summary;
+        } catch (err: any) {
+          this.logger.error(
+            `Portal document generation failed: ${err.message}`,
+            err.stack,
+          );
+          // Fallback: send the full markdown content
+          const chunk = JSON.stringify({
+            choices: [{ delta: { content: fullContent } }],
+          });
+          res.raw.write(`data: ${chunk}\n\n`);
         }
       }
 
@@ -722,5 +829,12 @@ export class PortalController {
       );
       res.raw.end();
     }
+  }
+
+  private extractFilenameHint(
+    messages: { role: string; content: string }[],
+  ): string | undefined {
+    const lastUser = [...messages].reverse().find((m) => m.role === "user");
+    return lastUser?.content.slice(0, 100) || undefined;
   }
 }

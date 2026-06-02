@@ -18,6 +18,7 @@ export const AttachToolSchema = z.object({
     "memory_store",
     "delegate_to_subagent",
     "create_reminder",
+    "create_document",
   ]),
   config: z.record(z.any()).optional(),
   enabled: z.boolean().optional().default(true),

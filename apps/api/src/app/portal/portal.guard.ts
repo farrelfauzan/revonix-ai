@@ -3,6 +3,7 @@ import {
   ExecutionContext,
   Injectable,
   BadRequestException,
+  Logger,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { PrismaService } from "../prisma/prisma.service";
@@ -20,6 +21,8 @@ export interface PortalIdentity {
 
 @Injectable()
 export class PortalGuard implements CanActivate {
+  private readonly logger = new Logger(PortalGuard.name);
+
   constructor(
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
@@ -55,8 +58,9 @@ export class PortalGuard implements CanActivate {
               balance: Number(dbUser.balance),
             };
           }
-        } catch {
+        } catch (e) {
           // Invalid JWT — treat as anonymous (free tier)
+          this.logger.warn(`JWT verification failed: ${e?.message || e}`);
         }
       }
     }
@@ -85,10 +89,19 @@ export class PortalGuard implements CanActivate {
               email: dbUser.email,
               balance: Number(dbUser.balance),
             };
+          } else {
+            this.logger.warn(
+              `Better Auth session valid but user not found in DB: ${session.user.id}`,
+            );
           }
+        } else {
+          this.logger.debug(
+            `Better Auth getSession returned no user (session expired or invalid)`,
+          );
         }
-      } catch {
+      } catch (e) {
         // Invalid session — treat as anonymous
+        this.logger.warn(`Better Auth session lookup failed: ${e?.message || e}`);
       }
     }
 

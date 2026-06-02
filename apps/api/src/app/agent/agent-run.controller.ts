@@ -17,6 +17,7 @@ import { Throttle } from "@nestjs/throttler";
 import { CombinedAuthGuard } from "../guards/combined-auth.guard";
 import type { FastifyReply } from "fastify";
 import { AgentRunService } from "./agent-run.service";
+import { AgentToolService } from "./agent-tool.service";
 import { AgentChatSchema } from "./dto/agent-chat.dto";
 import { DocumentService } from "../document/document.service";
 import { ProviderRouter } from "../providers/provider-router";
@@ -28,6 +29,7 @@ export class AgentRunController {
 
   constructor(
     private readonly runService: AgentRunService,
+    private readonly toolService: AgentToolService,
     private readonly documentService: DocumentService,
     private readonly providerRouter: ProviderRouter,
   ) {}
@@ -82,6 +84,9 @@ export class AgentRunController {
         );
       }
 
+      // Clear any previous document result before running
+      this.toolService.clearLastDocumentResult();
+
       // Use non-streaming chat (reliable, no stream issues)
       const result = await this.runService.chat(
         userId,
@@ -95,8 +100,24 @@ export class AgentRunController {
         `[Controller] chat completed | runId=${result.runId} contentLen=${result.message.content?.length ?? 0}`,
       );
 
-      // Generate document if format detected
-      if (detectedFormat && result.message.content) {
+      // Check if create_document tool was called during the run
+      const toolDocumentResult = this.toolService.getLastDocumentResult();
+      this.toolService.clearLastDocumentResult();
+
+      if (toolDocumentResult) {
+        // Document was generated via tool call — send it
+        const summary = this.buildDocumentSummary(
+          message,
+          toolDocumentResult.format,
+        );
+        const chunk = JSON.stringify({
+          choices: [{ delta: { content: summary } }],
+        });
+        res.raw.write(`data: ${chunk}\n\n`);
+        const { key: _key, ...document } = toolDocumentResult;
+        res.raw.write(`data: ${JSON.stringify({ document })}\n\n`);
+      } else if (detectedFormat && result.message.content) {
+        // Fallback: classifier detected format, generate from response content
         try {
           const document = await this.documentService.generate(
             result.message.content,

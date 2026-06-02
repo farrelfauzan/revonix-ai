@@ -3,6 +3,7 @@ import { McpClientService } from "../mcp/mcp-client.service";
 import { McpService } from "../mcp/mcp.service";
 import { McpUserService } from "../mcp/mcp-user.service";
 import { AgentMemoryService } from "./agent-memory.service";
+import { DocumentService } from "../document/document.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { CronExpressionParser } from "cron-parser";
 
@@ -37,11 +38,21 @@ export class AgentToolService {
     }
   }
 
+  // Store last generated document result for the current run
+  private lastDocumentResult: {
+    format: string;
+    url: string;
+    filename: string;
+    expiresAt: string;
+    key: string;
+  } | null = null;
+
   constructor(
     private readonly mcpClient: McpClientService,
     private readonly mcpService: McpService,
     private readonly mcpUserService: McpUserService,
     private readonly memoryService: AgentMemoryService,
+    private readonly documentService: DocumentService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -199,6 +210,35 @@ export class AgentToolService {
         },
       },
     },
+    create_document: {
+      type: "function",
+      function: {
+        name: "create_document",
+        description:
+          "Generate and export a document file (PDF, Word, or Excel) from markdown content. Use this when the user asks to create, generate, export, or download a document in PDF, DOCX, or XLSX format.",
+        parameters: {
+          type: "object",
+          properties: {
+            content: {
+              type: "string",
+              description:
+                "The full document content in Markdown format. Use proper headings (#, ##, ###), lists, tables, and formatting. Write complete, professional-quality content.",
+            },
+            format: {
+              type: "string",
+              enum: ["pdf", "docx", "xlsx"],
+              description: "The output file format",
+            },
+            filename: {
+              type: "string",
+              description:
+                "Optional filename for the document (without extension)",
+            },
+          },
+          required: ["content", "format"],
+        },
+      },
+    },
   };
 
   // Track which MCP server owns which tool (populated during buildToolSchemas)
@@ -223,6 +263,11 @@ export class AgentToolService {
       !schemas.some((s) => s.function.name === "delegate_to_subagent")
     ) {
       schemas.push(this.toolDefinitions["delegate_to_subagent"]);
+    }
+
+    // Auto-inject create_document for all agents (core platform feature)
+    if (!schemas.some((s) => s.function.name === "create_document")) {
+      schemas.push(this.toolDefinitions["create_document"]);
     }
 
     return schemas;
@@ -331,6 +376,8 @@ export class AgentToolService {
           return this.executeCodeExec(args);
         case "create_reminder":
           return this.executeCreateReminder(args, agent, userId, channelId);
+        case "create_document":
+          return this.executeCreateDocument(args);
         default:
           return `Tool "${toolName}" is not available. It may require an MCP integration to be connected.`;
       }
@@ -472,6 +519,45 @@ export class AgentToolService {
       }
     }
     return `Language "${args.language}" execution is not yet supported.`;
+  }
+
+  private async executeCreateDocument(args: {
+    content: string;
+    format: string;
+    filename?: string;
+  }): Promise<string> {
+    if (!args.content || !args.format) {
+      return "Error: Both 'content' (markdown) and 'format' (pdf/docx/xlsx) are required.";
+    }
+    const validFormats = ["pdf", "docx", "xlsx"];
+    if (!validFormats.includes(args.format)) {
+      return `Error: Invalid format "${args.format}". Must be one of: pdf, docx, xlsx.`;
+    }
+    try {
+      const result = await this.documentService.generateWithStorage(
+        args.content,
+        args.format,
+        args.filename,
+      );
+      this.lastDocumentResult = result;
+      const formatLabels: Record<string, string> = {
+        pdf: "PDF",
+        docx: "Word document",
+        xlsx: "Excel spreadsheet",
+      };
+      return `Successfully generated ${formatLabels[args.format] || args.format} document: "${result.filename}". The file is ready for download.`;
+    } catch (err: any) {
+      this.logger.error(`[create_document] Failed: ${err.message}`, err.stack);
+      return `Failed to generate document: ${err.message}`;
+    }
+  }
+
+  getLastDocumentResult() {
+    return this.lastDocumentResult;
+  }
+
+  clearLastDocumentResult() {
+    this.lastDocumentResult = null;
   }
 
   private async executeCreateReminder(

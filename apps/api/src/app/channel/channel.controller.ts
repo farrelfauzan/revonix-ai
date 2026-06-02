@@ -22,6 +22,7 @@ import { ChannelService } from "./channel.service";
 import { ChannelChatService } from "./channel-chat.service";
 import { S3Service } from "../knowledge/s3.service";
 import { DocumentService } from "../document/document.service";
+import { AgentToolService } from "../agent/agent-tool.service";
 import { ProviderRouter } from "../providers/provider-router";
 import { z } from "zod";
 
@@ -57,6 +58,7 @@ export class ChannelController {
     private readonly chatService: ChannelChatService,
     private readonly s3Service: S3Service,
     private readonly documentService: DocumentService,
+    private readonly toolService: AgentToolService,
     private readonly providerRouter: ProviderRouter,
   ) {}
 
@@ -316,6 +318,9 @@ export class ChannelController {
         );
       }
 
+      // Clear any previous document result before running
+      this.toolService.clearLastDocumentResult();
+
       const result = await this.chatService.chat(
         userId,
         id,
@@ -324,8 +329,35 @@ export class ChannelController {
         detectedFormat ? { documentFormat: detectedFormat } : undefined,
       );
 
-      // Generate document if format detected
-      if (detectedFormat && result.content) {
+      // Check if create_document tool was called during the run
+      const toolDocumentResult = this.toolService.getLastDocumentResult();
+      this.toolService.clearLastDocumentResult();
+
+      if (toolDocumentResult) {
+        // Document generated via tool call
+        const summary = this.buildDocumentSummary(
+          parsed.data.message,
+          toolDocumentResult.format,
+        );
+        if (result.assistantMessageId) {
+          const { key: _key, ...docForAttach } = toolDocumentResult;
+          await this.channelService.attachDocumentToMessage(
+            userId,
+            id,
+            agentId,
+            result.assistantMessageId,
+            summary,
+            docForAttach,
+          );
+        }
+        const chunk = JSON.stringify({
+          choices: [{ delta: { content: summary } }],
+        });
+        res.raw.write(`data: ${chunk}\n\n`);
+        const { key: _key, ...document } = toolDocumentResult;
+        res.raw.write(`data: ${JSON.stringify({ document })}\n\n`);
+      } else if (detectedFormat && result.content) {
+        // Fallback: classifier detected format
         this.logger.log(
           `[chat] Generating ${detectedFormat} document, content length=${result.content.length}`,
         );
