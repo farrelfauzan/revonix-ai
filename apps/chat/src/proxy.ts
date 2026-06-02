@@ -10,12 +10,13 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Check for authentication tokens
-  const sessionToken = request.cookies.get("better-auth.session_token")?.value;
-  console.log("Session token:", sessionToken);
+  // In production with secure cookies, Better Auth prefixes names with __Secure-
+  const sessionToken =
+    request.cookies.get("better-auth.session_token")?.value ||
+    request.cookies.get("__Secure-better-auth.session_token")?.value;
   const jwt = request.cookies.get("jwt")?.value;
 
   const isAuthenticated = !!sessionToken || !!jwt;
-  console.log("Is authenticated:", isAuthenticated);
 
   if (!isAuthenticated) {
     const loginUrl = new URL("/login", request.url);
