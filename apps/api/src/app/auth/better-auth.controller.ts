@@ -9,8 +9,12 @@ import { auth } from "../../lib/auth";
 export class BetterAuthController {
   @All("*")
   async handleAuth(@Req() req: any, @Res() res: any) {
-    // Convert Fastify request to a Web Request for Better Auth
-    const url = `${req.protocol}://${req.hostname}${req.url}`;
+    // Build the canonical URL using API_PUBLIC_URL for production correctness
+    // (Cloud Run may use internal hostnames behind the LB)
+    const baseURL = process.env.API_PUBLIC_URL || `${req.protocol}://${req.hostname}`;
+    const path = req.url; // e.g. /api/auth/better/callback/google?code=...
+    const url = `${baseURL.replace(/\/+$/, "")}${path}`;
+
     const headers = new Headers();
     for (const [key, value] of Object.entries(req.headers)) {
       if (value) {

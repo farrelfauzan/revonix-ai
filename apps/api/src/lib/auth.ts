@@ -4,6 +4,28 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@generated/prisma/client.js";
 import crypto from "crypto";
 
+const isProduction = process.env.NODE_ENV === "production";
+
+/**
+ * Derive the parent cookie domain from API_PUBLIC_URL.
+ * e.g. "https://api.renovix.id" → ".renovix.id"
+ */
+function getCookieDomain(): string | undefined {
+  if (process.env.COOKIE_DOMAIN) return process.env.COOKIE_DOMAIN;
+  if (!isProduction) return undefined;
+  try {
+    const hostname = new URL(
+      process.env.API_PUBLIC_URL || "http://localhost:3000",
+    ).hostname;
+    const parts = hostname.split(".");
+    if (parts.length >= 2) {
+      // e.g. api.renovix.id → .renovix.id
+      return "." + parts.slice(-2).join(".");
+    }
+  } catch {}
+  return undefined;
+}
+
 let prismaInstance: PrismaClient | null = null;
 
 function getPrisma() {
@@ -56,12 +78,12 @@ export const auth = betterAuth({
       generateId: () => crypto.randomUUID(),
     },
     crossSubDomainCookies: {
-      enabled: process.env.NODE_ENV === "production",
-      domain: process.env.COOKIE_DOMAIN || undefined, // e.g. ".renovix.id"
+      enabled: isProduction,
+      domain: getCookieDomain(),
     },
     defaultCookieAttributes: {
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "lax",
     },
   },
   secret:
