@@ -475,7 +475,6 @@ export class PortalController {
           const document = await this.documentService.generateWithStorage(
             fullContent,
             outputFormat,
-            this.extractFilenameHint(body.messages),
           );
 
           const formatLabels: Record<string, string> = {
@@ -698,7 +697,6 @@ export class PortalController {
           const document = await this.documentService.generateWithStorage(
             fullContent,
             outputFormat,
-            this.extractFilenameHint(body.messages),
           );
 
           // Send a short summary message
@@ -829,12 +827,5 @@ export class PortalController {
       );
       res.raw.end();
     }
-  }
-
-  private extractFilenameHint(
-    messages: { role: string; content: string }[],
-  ): string | undefined {
-    const lastUser = [...messages].reverse().find((m) => m.role === "user");
-    return lastUser?.content.slice(0, 100) || undefined;
   }
 }

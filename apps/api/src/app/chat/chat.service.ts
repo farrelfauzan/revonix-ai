@@ -145,7 +145,6 @@ export class ChatService {
         document = await this.documentService.generateWithStorage(
           assistantMarkdown,
           outputFormat,
-          this.extractLatestUserPrompt(body.messages),
         );
       } catch (err: any) {
         this.logger.error(
@@ -221,16 +220,5 @@ export class ChatService {
     filename: string;
   }): string {
     return `I've generated your ${document.format.toUpperCase()} document: **${document.filename}**`;
-  }
-
-  private extractLatestUserPrompt(
-    messages: Array<{ role: string; content: string }>,
-  ): string | undefined {
-    const latestUserMessage = [...messages]
-      .reverse()
-      .find((message) => message.role === "user")
-      ?.content?.trim();
-
-    return latestUserMessage || undefined;
   }
 }
