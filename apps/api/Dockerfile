@@ -47,6 +47,7 @@ COPY --from=prisma --chown=appuser:nodejs /app/node_modules ./node_modules
 COPY --from=prisma --chown=appuser:nodejs /app/prisma ./prisma
 COPY --from=prisma --chown=appuser:nodejs /app/prisma.config.ts ./prisma.config.ts
 COPY --from=prisma --chown=appuser:nodejs /app/package.json ./package.json
+COPY --from=prisma --chown=appuser:nodejs /app/apps/api/src/generated ./apps/api/src/generated
 
 USER appuser
 

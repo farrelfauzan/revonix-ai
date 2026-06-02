@@ -1,0 +1,255 @@
+name: Deploy
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  GCP_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_REGION: ${{ secrets.GCP_REGION }}
+  REGISTRY: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/renovix
+  API_URL: https://api.renovix.id/api/v1
+
+jobs:
+  parse-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.parse.outputs.version }}
+      app: ${{ steps.parse.outputs.app }}
+      deploy-api: ${{ steps.parse.outputs.deploy-api }}
+      deploy-chat: ${{ steps.parse.outputs.deploy-chat }}
+      deploy-dashboard: ${{ steps.parse.outputs.deploy-dashboard }}
+      deploy-landing: ${{ steps.parse.outputs.deploy-landing }}
+    steps:
+      - name: Parse tag
+        id: parse
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+          # Extract version and optional app suffix
+          if [[ "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)(-(.+))?$ ]]; then
+            VERSION="${BASH_REMATCH[1]}"
+            APP="${BASH_REMATCH[3]}"
+          else
+            echo "::error::Invalid tag format: $TAG (expected v<semver> or v<semver>-<app>)"
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "app=$APP" >> $GITHUB_OUTPUT
+
+          # Determine which apps to deploy
+          if [ -z "$APP" ]; then
+            echo "deploy-api=true" >> $GITHUB_OUTPUT
+            echo "deploy-chat=true" >> $GITHUB_OUTPUT
+            echo "deploy-dashboard=true" >> $GITHUB_OUTPUT
+            echo "deploy-landing=true" >> $GITHUB_OUTPUT
+          else
+            echo "deploy-api=$( [ "$APP" = "api" ] && echo true || echo false )" >> $GITHUB_OUTPUT
+            echo "deploy-chat=$( [ "$APP" = "chat" ] && echo true || echo false )" >> $GITHUB_OUTPUT
+            echo "deploy-dashboard=$( [ "$APP" = "dashboard" ] && echo true || echo false )" >> $GITHUB_OUTPUT
+            echo "deploy-landing=$( [ "$APP" = "landing" ] && echo true || echo false )" >> $GITHUB_OUTPUT
+          fi
+
+  build-push-api:
+    needs: parse-tag
+    if: needs.parse-tag.outputs.deploy-api == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push API image
+        run: |
+          TAG="${{ needs.parse-tag.outputs.version }}"
+          docker build \
+            -f apps/api/Dockerfile \
+            -t ${{ env.REGISTRY }}/api:$TAG \
+            -t ${{ env.REGISTRY }}/api:latest \
+            .
+          docker push ${{ env.REGISTRY }}/api:$TAG
+          docker push ${{ env.REGISTRY }}/api:latest
+
+  build-push-chat:
+    needs: parse-tag
+    if: needs.parse-tag.outputs.deploy-chat == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push Chat image
+        run: |
+          TAG="${{ needs.parse-tag.outputs.version }}"
+          docker build \
+            -f apps/chat/Dockerfile \
+            --build-arg NEXT_PUBLIC_API_URL=${{ env.API_URL }} \
+            -t ${{ env.REGISTRY }}/chat:$TAG \
+            -t ${{ env.REGISTRY }}/chat:latest \
+            .
+          docker push ${{ env.REGISTRY }}/chat:$TAG
+          docker push ${{ env.REGISTRY }}/chat:latest
+
+  build-push-dashboard:
+    needs: parse-tag
+    if: needs.parse-tag.outputs.deploy-dashboard == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push Dashboard image
+        run: |
+          TAG="${{ needs.parse-tag.outputs.version }}"
+          docker build \
+            -f apps/dashboard/Dockerfile \
+            --build-arg NEXT_PUBLIC_API_URL=${{ env.API_URL }} \
+            -t ${{ env.REGISTRY }}/dashboard:$TAG \
+            -t ${{ env.REGISTRY }}/dashboard:latest \
+            .
+          docker push ${{ env.REGISTRY }}/dashboard:$TAG
+          docker push ${{ env.REGISTRY }}/dashboard:latest
+
+  build-push-landing:
+    needs: parse-tag
+    if: needs.parse-tag.outputs.deploy-landing == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push Landing image
+        run: |
+          TAG="${{ needs.parse-tag.outputs.version }}"
+          docker build \
+            -f apps/landing/Dockerfile \
+            -t ${{ env.REGISTRY }}/landing:$TAG \
+            -t ${{ env.REGISTRY }}/landing:latest \
+            .
+          docker push ${{ env.REGISTRY }}/landing:$TAG
+          docker push ${{ env.REGISTRY }}/landing:latest
+
+  migrate:
+    needs: [parse-tag, build-push-api]
+    if: needs.parse-tag.outputs.deploy-api == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts --legacy-peer-deps
+
+      - name: Run Prisma migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx prisma migrate deploy
+
+  deploy-api:
+    needs: [parse-tag, build-push-api, migrate]
+    if: needs.parse-tag.outputs.deploy-api == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy API to Cloud Run
+        run: |
+          gcloud run services update renovix-api \
+            --image=${{ env.REGISTRY }}/api:${{ needs.parse-tag.outputs.version }} \
+            --region=${{ env.GCP_REGION }} \
+            --project=${{ env.GCP_PROJECT }}
+
+  deploy-chat:
+    needs: [parse-tag, build-push-chat]
+    if: needs.parse-tag.outputs.deploy-chat == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy Chat to Cloud Run
+        run: |
+          gcloud run services update renovix-chat \
+            --image=${{ env.REGISTRY }}/chat:${{ needs.parse-tag.outputs.version }} \
+            --region=${{ env.GCP_REGION }} \
+            --project=${{ env.GCP_PROJECT }}
+
+  deploy-dashboard:
+    needs: [parse-tag, build-push-dashboard]
+    if: needs.parse-tag.outputs.deploy-dashboard == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy Dashboard to Cloud Run
+        run: |
+          gcloud run services update renovix-dashboard \
+            --image=${{ env.REGISTRY }}/dashboard:${{ needs.parse-tag.outputs.version }} \
+            --region=${{ env.GCP_REGION }} \
+            --project=${{ env.GCP_PROJECT }}
+
+  deploy-landing:
+    needs: [parse-tag, build-push-landing]
+    if: needs.parse-tag.outputs.deploy-landing == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy Landing to Cloud Run
+        run: |
+          gcloud run services update renovix-landing \
+            --image=${{ env.REGISTRY }}/landing:${{ needs.parse-tag.outputs.version }} \
+            --region=${{ env.GCP_REGION }} \
+            --project=${{ env.GCP_PROJECT }}

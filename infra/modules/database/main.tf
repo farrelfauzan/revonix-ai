@@ -12,8 +12,13 @@ resource "google_sql_database_instance" "main" {
     disk_autoresize   = true
 
     ip_configuration {
-      ipv4_enabled    = false
+      ipv4_enabled    = true
       private_network = var.network_id
+
+      authorized_networks {
+        name  = "allow-dev"
+        value = var.authorized_ip
+      }
     }
 
     backup_configuration {

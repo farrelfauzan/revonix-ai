@@ -7,7 +7,7 @@ steps:
       - '-f'
       - 'apps/api/Dockerfile'
       - '-t'
-      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/api:${SHORT_SHA}'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/api:${_TAG}'
       - '-t'
       - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/api:latest'
       - '.'
@@ -20,9 +20,9 @@ steps:
       - '-f'
       - 'apps/chat/Dockerfile'
       - '--build-arg'
-      - 'NEXT_PUBLIC_API_URL=https://api.${_DOMAIN}'
+      - 'NEXT_PUBLIC_API_URL=https://api.${_DOMAIN}/api/v1'
       - '-t'
-      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/chat:${SHORT_SHA}'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/chat:${_TAG}'
       - '-t'
       - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/chat:latest'
       - '.'
@@ -36,9 +36,9 @@ steps:
       - '-f'
       - 'apps/dashboard/Dockerfile'
       - '--build-arg'
-      - 'NEXT_PUBLIC_API_URL=https://api.${_DOMAIN}'
+      - 'NEXT_PUBLIC_API_URL=https://api.${_DOMAIN}/api/v1'
       - '-t'
-      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/dashboard:${SHORT_SHA}'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/dashboard:${_TAG}'
       - '-t'
       - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/dashboard:latest'
       - '.'
@@ -52,7 +52,7 @@ steps:
       - '-f'
       - 'apps/landing/Dockerfile'
       - '-t'
-      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/landing:${SHORT_SHA}'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/landing:${_TAG}'
       - '-t'
       - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/landing:latest'
       - '.'
@@ -65,30 +65,44 @@ steps:
     args:
       - '-c'
       - |
-        docker push ${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/api:${SHORT_SHA} &
+        docker push ${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/api:${_TAG} &
         docker push ${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/api:latest &
-        docker push ${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/chat:${SHORT_SHA} &
+        docker push ${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/chat:${_TAG} &
         docker push ${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/chat:latest &
-        docker push ${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/dashboard:${SHORT_SHA} &
+        docker push ${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/dashboard:${_TAG} &
         docker push ${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/dashboard:latest &
-        docker push ${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/landing:${SHORT_SHA} &
+        docker push ${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/landing:${_TAG} &
         docker push ${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/landing:latest &
         wait
     waitFor: ['build-api', 'build-chat', 'build-dashboard', 'build-landing']
 
   # ─── Run Prisma Migrations ───
   - id: 'migrate'
-    name: 'gcr.io/cloud-builders/docker'
-    entrypoint: 'bash'
+    name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
     args:
-      - '-c'
-      - |
-        docker run --rm \
-          -e DATABASE_URL="$$DATABASE_URL" \
-          ${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/api:${SHORT_SHA} \
-          npx prisma migrate deploy
-    secretEnv: ['DATABASE_URL']
+      - 'run'
+      - 'jobs'
+      - 'execute'
+      - 'prisma-migrate'
+      - '--region'
+      - '${_REGION}'
+      - '--wait'
     waitFor: ['push-images']
+
+  # ─── Seed Database ───
+  - id: 'seed'
+    name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'jobs'
+      - 'execute'
+      - 'prisma-seed'
+      - '--region'
+      - '${_REGION}'
+      - '--wait'
+    waitFor: ['migrate']
 
   # ─── Deploy API to Cloud Run ───
   - id: 'deploy-api'
@@ -100,10 +114,10 @@ steps:
       - 'update'
       - 'renovix-api'
       - '--image'
-      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/api:${SHORT_SHA}'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/api:${_TAG}'
       - '--region'
       - '${_REGION}'
-    waitFor: ['migrate']
+    waitFor: ['seed']
 
   # ─── Deploy Chat to Cloud Run ───
   - id: 'deploy-chat'
@@ -115,7 +129,7 @@ steps:
       - 'update'
       - 'renovix-chat'
       - '--image'
-      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/chat:${SHORT_SHA}'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/chat:${_TAG}'
       - '--region'
       - '${_REGION}'
     waitFor: ['push-images']
@@ -130,7 +144,7 @@ steps:
       - 'update'
       - 'renovix-dashboard'
       - '--image'
-      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/dashboard:${SHORT_SHA}'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/dashboard:${_TAG}'
       - '--region'
       - '${_REGION}'
     waitFor: ['push-images']
@@ -145,7 +159,7 @@ steps:
       - 'update'
       - 'renovix-landing'
       - '--image'
-      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/landing:${SHORT_SHA}'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/landing:${_TAG}'
       - '--region'
       - '${_REGION}'
     waitFor: ['push-images']
@@ -153,11 +167,7 @@ steps:
 substitutions:
   _REGION: 'asia-southeast2'
   _DOMAIN: 'renovix.id'
-
-availableSecrets:
-  secretManager:
-    - versionName: projects/${PROJECT_ID}/secrets/database-url/versions/latest
-      env: 'DATABASE_URL'
+  _TAG: '${_TAG}'
 
 options:
   logging: CLOUD_LOGGING_ONLY

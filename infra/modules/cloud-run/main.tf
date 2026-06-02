@@ -134,6 +134,16 @@ resource "google_cloud_run_v2_service" "api" {
         value = "https://chat.${var.domain}"
       }
 
+      env {
+        name  = "CORS_ORIGIN"
+        value = "https://chat.${var.domain},https://dashboard.${var.domain},https://${var.domain},https://www.${var.domain}"
+      }
+
+      env {
+        name  = "GOOGLE_OAUTH_REDIRECT_URI"
+        value = "https://api.${var.domain}/api/v1/mcp/user/oauth/callback"
+      }
+
       startup_probe {
         http_get {
           path = "/api/health"
@@ -193,7 +203,7 @@ resource "google_cloud_run_v2_service" "chat" {
 
       env {
         name  = "NEXT_PUBLIC_API_URL"
-        value = "https://api.${var.domain}"
+        value = "https://api.${var.domain}/api/v1"
       }
 
       env {
@@ -243,7 +253,7 @@ resource "google_cloud_run_v2_service" "dashboard" {
 
       env {
         name  = "NEXT_PUBLIC_API_URL"
-        value = "https://api.${var.domain}"
+        value = "https://api.${var.domain}/api/v1"
       }
 
       env {
