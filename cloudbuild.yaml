@@ -76,34 +76,6 @@ steps:
         wait
     waitFor: ['build-api', 'build-chat', 'build-dashboard', 'build-landing']
 
-  # ─── Run Prisma Migrations ───
-  - id: 'migrate'
-    name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: 'gcloud'
-    args:
-      - 'run'
-      - 'jobs'
-      - 'execute'
-      - 'prisma-migrate'
-      - '--region'
-      - '${_REGION}'
-      - '--wait'
-    waitFor: ['push-images']
-
-  # ─── Seed Database ───
-  - id: 'seed'
-    name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: 'gcloud'
-    args:
-      - 'run'
-      - 'jobs'
-      - 'execute'
-      - 'prisma-seed'
-      - '--region'
-      - '${_REGION}'
-      - '--wait'
-    waitFor: ['migrate']
-
   # ─── Deploy API to Cloud Run ───
   - id: 'deploy-api'
     name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -117,7 +89,7 @@ steps:
       - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/renovix/api:${_TAG}'
       - '--region'
       - '${_REGION}'
-    waitFor: ['seed']
+    waitFor: ['push-images']
 
   # ─── Deploy Chat to Cloud Run ───
   - id: 'deploy-chat'

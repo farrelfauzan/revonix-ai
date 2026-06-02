@@ -163,27 +163,8 @@ jobs:
           docker push ${{ env.REGISTRY }}/landing:$TAG
           docker push ${{ env.REGISTRY }}/landing:latest
 
-  migrate:
-    needs: [parse-tag, build-push-api]
-    if: needs.parse-tag.outputs.deploy-api == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Install dependencies
-        run: npm install --ignore-scripts --legacy-peer-deps
-
-      - name: Run Prisma migrations
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: npx prisma migrate deploy
-
   deploy-api:
-    needs: [parse-tag, build-push-api, migrate]
+    needs: [parse-tag, build-push-api]
     if: needs.parse-tag.outputs.deploy-api == 'true'
     runs-on: ubuntu-latest
     steps:
