@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useAuthStore } from "@/lib/stores";
+import { useAuthStore, useHydrated } from "@/lib/stores";
 import { apiClient } from "@/lib/api-client";
-import { ArrowLeft, Gift, CheckCircle2, AlertCircle } from "lucide-react";
+import { ArrowLeft, Gift, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import Link from "next/link";
 
 export default function TopUpPage() {
@@ -17,6 +17,7 @@ export default function TopUpPage() {
     creditAmount?: number;
     planName?: string;
   } | null>(null);
+  const hydrated = useHydrated();
   const { isLoggedIn, setBalance, balance } = useAuthStore();
 
   const handleRedeem = async (e: React.FormEvent) => {
@@ -58,6 +59,14 @@ export default function TopUpPage() {
       setLoading(false);
     }
   };
+
+  if (!hydrated) {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   if (!isLoggedIn()) {
     return (

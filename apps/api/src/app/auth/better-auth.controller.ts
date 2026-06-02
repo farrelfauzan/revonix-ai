@@ -34,8 +34,17 @@ export class BetterAuthController {
 
     // Convert Web Response back to Fastify response
     res.status(response.status);
+
+    // Handle Set-Cookie headers separately — forEach merges them into a
+    // single comma-separated value which browsers cannot parse correctly.
+    const setCookieHeaders = response.headers.getSetCookie();
+    if (setCookieHeaders.length > 0) {
+      res.header("set-cookie", setCookieHeaders);
+    }
     response.headers.forEach((value: string, key: string) => {
-      res.header(key, value);
+      if (key.toLowerCase() !== "set-cookie") {
+        res.header(key, value);
+      }
     });
 
     const body = await response.text();

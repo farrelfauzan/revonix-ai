@@ -20,11 +20,6 @@ export const auth = betterAuth({
   baseURL: process.env.API_PUBLIC_URL || "http://localhost:3000",
   database: prismaAdapter(getPrisma(), { provider: "postgresql" }),
   basePath: "/api/auth/better",
-  advanced: {
-    database: {
-      generateId: () => crypto.randomUUID(),
-    },
-  },
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 8,
@@ -51,6 +46,23 @@ export const auth = betterAuth({
   session: {
     expiresIn: 7 * 24 * 60 * 60, // 7 days
     updateAge: 24 * 60 * 60, // Refresh session if older than 1 day
+    cookieCache: {
+      enabled: true,
+      maxAge: 5 * 60, // 5 minutes
+    },
+  },
+  advanced: {
+    database: {
+      generateId: () => crypto.randomUUID(),
+    },
+    crossSubDomainCookies: {
+      enabled: process.env.NODE_ENV === "production",
+      domain: process.env.COOKIE_DOMAIN || undefined, // e.g. ".renovix.id"
+    },
+    defaultCookieAttributes: {
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    },
   },
   secret:
     process.env.BETTER_AUTH_SECRET || process.env.JWT_SECRET || "change-me",

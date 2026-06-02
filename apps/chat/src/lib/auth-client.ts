@@ -8,6 +8,9 @@ const baseURL = rawUrl.replace(/\/api\/v1\/?$/, "");
 export const authClient = createAuthClient({
   baseURL,
   basePath: "/api/auth/better",
+  fetchOptions: {
+    credentials: "include",
+  },
 });
 
 export const { signIn, signUp, signOut, useSession } = authClient;
