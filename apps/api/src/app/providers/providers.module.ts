@@ -1,9 +1,9 @@
 import { Module } from "@nestjs/common";
-import { TogetherAdapter } from "./together.adapter";
+import { OpenRouterAdapter } from "./openrouter.adapter";
 import { ProviderRouter } from "./provider-router";
 
 @Module({
-  providers: [TogetherAdapter, ProviderRouter],
+  providers: [OpenRouterAdapter, ProviderRouter],
   exports: [ProviderRouter],
 })
 export class ProvidersModule {}

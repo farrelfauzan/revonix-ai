@@ -99,18 +99,24 @@ model Transaction {
 }
 
 model AiModel {
-  id          String   @id @default(uuid())
-  slug        String   @unique
-  modelName   String   @map("model_name")
-  provider    String
-  providerId  String
-  inputPrice  Decimal  @db.Decimal(18, 12)
-  outputPrice Decimal  @db.Decimal(18, 12)
-  maxTokens   Int
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now()) @db.Timestamptz()
-  updatedAt   DateTime @updatedAt @db.Timestamptz()
+  id               String   @id @default(uuid())
+  slug             String   @unique
+  modelName        String   @map("model_name")
+  provider         String   @default("openrouter")
+  providerId       String   @map("provider_id")
+  inputPrice       Decimal  @db.Decimal(18, 12) @map("input_price")
+  outputPrice      Decimal  @db.Decimal(18, 12) @map("output_price")
+  maxTokens        Int      @map("max_tokens")
+  maxOutputTokens  Int?     @map("max_output_tokens")
+  tier             String   @default("standard")
+  creditMultiplier Decimal  @default(1.0) @db.Decimal(6, 2) @map("credit_multiplier")
+  planRequired     String   @default("free") @map("plan_required")
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now()) @db.Timestamptz()
+  updatedAt        DateTime @updatedAt @db.Timestamptz()
 
+  @@index([tier])
+  @@index([active, tier])
   @@map("ai_models")
 }
 

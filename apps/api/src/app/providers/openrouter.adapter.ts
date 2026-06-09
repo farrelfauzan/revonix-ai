@@ -8,33 +8,38 @@ import {
 } from "./provider.interface";
 
 @Injectable()
-export class TogetherAdapter implements ProviderAdapter {
-  private readonly logger = new Logger(TogetherAdapter.name);
+export class OpenRouterAdapter implements ProviderAdapter {
+  private readonly logger = new Logger(OpenRouterAdapter.name);
   private readonly apiKey: string;
-  private readonly baseUrl = "https://api.together.xyz/v1";
+  private readonly appTitle: string;
+  private readonly appUrl: string;
+  private readonly baseUrl = "https://openrouter.ai/api/v1";
 
   // Models that support reasoning_effort parameter
   private readonly modelsWithReasoningSupport = [
-    "MiniMaxAI/MiniMax-M2.7",
-    "deepseek-ai/DeepSeek-V4-Pro",
-    "zai-org/GLM-5.1",
-    "zai-org/GLM-5",
-    "moonshotai/Kimi-K2.6",
-    "moonshotai/Kimi-K2.5",
-    "Qwen/Qwen3.6-Plus",
-    "Qwen/Qwen3.5-397B-A17B",
-    "Qwen/Qwen3.5-9B",
-    "deepcogito/cogito-v2-1-671b",
-    "openai/gpt-oss-120b",
-    "openai/gpt-oss-20b",
+    "deepseek/deepseek-v4-pro",
+    "qwen/qwen3.7-max",
+    "qwen/qwen3.5-397b",
+    "x-ai/grok-4.3",
+    "anthropic/claude-sonnet-4.6",
+    "anthropic/claude-opus-4.7",
+    "anthropic/claude-opus-4.8",
+    "anthropic/claude-opus-4.8-fast",
   ];
 
   constructor(private readonly configService: ConfigService) {
-    this.apiKey = this.configService.getOrThrow<string>("TOGETHER_API_KEY");
+    this.apiKey = this.configService.getOrThrow<string>("OPENROUTER_API_KEY");
+    this.appTitle =
+      this.configService.get<string>("OPENROUTER_APP_TITLE") || "Renovix AI";
+    this.appUrl =
+      this.configService.get<string>("OPENROUTER_APP_URL") ||
+      "https://chat.renovix.id";
   }
 
   private supportsReasoning(modelId: string): boolean {
-    return this.modelsWithReasoningSupport.includes(modelId);
+    return this.modelsWithReasoningSupport.some((model) =>
+      modelId.includes(model.split("/")[1] || model),
+    );
   }
 
   async chat(params: ChatRequest): Promise<ChatResponse> {
@@ -45,7 +50,6 @@ export class TogetherAdapter implements ProviderAdapter {
       max_tokens: params.max_tokens ?? 4096,
     };
 
-    // Only add reasoning_effort for models that support it
     if (this.supportsReasoning(params.providerId) && params.reasoning_effort) {
       body.reasoning_effort = params.reasoning_effort;
     }
@@ -59,7 +63,6 @@ export class TogetherAdapter implements ProviderAdapter {
       body.tool_choice = params.tool_choice ?? "auto";
     }
 
-    // Retry with exponential backoff for transient errors
     const maxRetries = 6;
     let lastError: any;
 
@@ -72,6 +75,8 @@ export class TogetherAdapter implements ProviderAdapter {
             headers: {
               Authorization: `Bearer ${this.apiKey}`,
               "Content-Type": "application/json",
+              "HTTP-Referer": this.appUrl,
+              "X-Title": this.appTitle,
             },
             timeout: 300000,
           },
@@ -79,7 +84,6 @@ export class TogetherAdapter implements ProviderAdapter {
 
         const data = response.data;
 
-        // Debug: log raw message for short responses
         if (params.max_tokens && params.max_tokens <= 50) {
           this.logger.log(
             `[debug] raw choice: ${JSON.stringify(data.choices?.[0]?.message)}`,
@@ -110,20 +114,18 @@ export class TogetherAdapter implements ProviderAdapter {
         const isTimeout =
           err.code === "ECONNABORTED" || err.message?.includes("timeout");
 
-        // Only retry on transient errors (500, 502, 503, 429) or timeouts
         if (isTimeout || (status && [500, 502, 503, 429].includes(status))) {
           const delay =
             status === 429
               ? Math.min(5000 * 2 ** attempt, 60000)
               : Math.min(2000 * 2 ** attempt, 15000);
           this.logger.warn(
-            `[Together chat] Attempt ${attempt + 1}/${maxRetries} failed (${isTimeout ? "timeout" : status}). Retrying in ${delay}ms...`,
+            `[OpenRouter chat] Attempt ${attempt + 1}/${maxRetries} failed (${isTimeout ? "timeout" : status}). Retrying in ${delay}ms...`,
           );
           await new Promise((r) => setTimeout(r, delay));
           continue;
         }
 
-        // Non-retryable error
         throw err;
       }
     }
@@ -142,7 +144,6 @@ export class TogetherAdapter implements ProviderAdapter {
       stream: true,
     };
 
-    // Only add reasoning_effort for models that support it
     if (this.supportsReasoning(params.providerId) && params.reasoning_effort) {
       body.reasoning_effort = params.reasoning_effort;
     }
@@ -157,7 +158,7 @@ export class TogetherAdapter implements ProviderAdapter {
     }
 
     this.logger.log(
-      `[Together chatStream] model=${params.providerId} tool_choice=${JSON.stringify(body.tool_choice)} tools=${(params.tools || []).length}`,
+      `[OpenRouter chatStream] model=${params.providerId} tool_choice=${JSON.stringify(body.tool_choice)} tools=${(params.tools || []).length}`,
     );
 
     let response;
@@ -166,17 +167,18 @@ export class TogetherAdapter implements ProviderAdapter {
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
           "Content-Type": "application/json",
+          "HTTP-Referer": this.appUrl,
+          "X-Title": this.appTitle,
         },
         timeout: 120000,
         responseType: "stream",
       });
     } catch (err: any) {
-      // Log the upstream error body for debugging
       const errBody = err.response?.data
         ? await this.drainStream(err.response.data)
         : err.message;
       this.logger.error(
-        `Together stream error (${err.response?.status}): ${errBody}`,
+        `OpenRouter stream error (${err.response?.status}): ${errBody}`,
       );
       throw err;
     }
@@ -187,15 +189,13 @@ export class TogetherAdapter implements ProviderAdapter {
     let completed = false;
 
     this.logger.log(
-      `[Together chatStream] Stream connected, waiting for data...`,
+      `[OpenRouter chatStream] Stream connected, waiting for data...`,
     );
 
     stream.on("error", (err: any) => {
-      // After a successful return/completion, Node destroys the stream which
-      // fires "aborted". This is expected and can be safely ignored.
       if (completed) return;
       this.logger.warn(
-        `[Together chatStream] Stream error event: ${err.message}`,
+        `[OpenRouter chatStream] Stream error event: ${err.message}`,
       );
     });
 
@@ -204,7 +204,7 @@ export class TogetherAdapter implements ProviderAdapter {
         chunkCount++;
         if (chunkCount === 1) {
           this.logger.log(
-            `[Together chatStream] First chunk received (${chunk.toString().length} bytes)`,
+            `[OpenRouter chatStream] First chunk received (${chunk.toString().length} bytes)`,
           );
         }
         buffer += chunk.toString();
@@ -217,7 +217,7 @@ export class TogetherAdapter implements ProviderAdapter {
           const payload = trimmed.slice(6);
           if (payload === "[DONE]") {
             this.logger.log(
-              `[Together chatStream] Stream complete (${chunkCount} chunks)`,
+              `[OpenRouter chatStream] Stream complete (${chunkCount} chunks)`,
             );
             completed = true;
             return;
@@ -226,11 +226,10 @@ export class TogetherAdapter implements ProviderAdapter {
         }
       }
     } catch (err: any) {
-      // Handle "aborted" errors gracefully — the client likely disconnected
       if (err.message === "aborted" || err.code === "ECONNRESET") {
         completed = true;
         this.logger.warn(
-          `[Together chatStream] Stream aborted after ${chunkCount} chunks (client likely disconnected)`,
+          `[OpenRouter chatStream] Stream aborted after ${chunkCount} chunks (client likely disconnected)`,
         );
         return;
       }
@@ -238,7 +237,7 @@ export class TogetherAdapter implements ProviderAdapter {
     }
 
     this.logger.log(
-      `[Together chatStream] Stream ended without [DONE] (${chunkCount} chunks)`,
+      `[OpenRouter chatStream] Stream ended without [DONE] (${chunkCount} chunks)`,
     );
   }
 

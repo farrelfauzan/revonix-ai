@@ -40,6 +40,8 @@ export default function AgentChatPageClient({
     isAgentStreaming,
     streamingAgentContent,
   } = useAgentStore();
+  console.log("Active Run ID:", activeRunId);
+  console.log("Agent Messages:", agentMessages);
   const { sendMessage, stopStreaming, isStreaming } = useAgentChat(id);
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
