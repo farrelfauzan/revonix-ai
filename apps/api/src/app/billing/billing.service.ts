@@ -18,10 +18,16 @@ export class BillingService {
   }
 
   /**
-   * Estimate cost based on estimated input tokens and model pricing.
+   * Estimate cost based on estimated input tokens, model pricing, and credit multiplier.
    */
-  estimateCost(estimatedTokens: number, inputPrice: number): Decimal {
-    return new Decimal(estimatedTokens).mul(new Decimal(inputPrice));
+  estimateCost(
+    estimatedTokens: number,
+    inputPrice: number,
+    creditMultiplier: number,
+  ): Decimal {
+    return new Decimal(estimatedTokens)
+      .mul(new Decimal(inputPrice))
+      .mul(new Decimal(creditMultiplier));
   }
 
   /**
@@ -56,17 +62,18 @@ export class BillingService {
   }
 
   /**
-   * Calculate actual cost from provider usage response.
+   * Calculate actual cost from provider usage response, including credit multiplier.
    */
   calculateActualCost(
     inputTokens: number,
     outputTokens: number,
     inputPrice: number,
     outputPrice: number,
+    creditMultiplier: number,
   ): Decimal {
     const inputCost = new Decimal(inputTokens).mul(new Decimal(inputPrice));
     const outputCost = new Decimal(outputTokens).mul(new Decimal(outputPrice));
-    return inputCost.add(outputCost);
+    return inputCost.add(outputCost).mul(new Decimal(creditMultiplier));
   }
 
   /**

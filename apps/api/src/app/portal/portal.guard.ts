@@ -101,7 +101,9 @@ export class PortalGuard implements CanActivate {
         }
       } catch (e) {
         // Invalid session — treat as anonymous
-        this.logger.warn(`Better Auth session lookup failed: ${e?.message || e}`);
+        this.logger.warn(
+          `Better Auth session lookup failed: ${e?.message || e}`,
+        );
       }
     }
 

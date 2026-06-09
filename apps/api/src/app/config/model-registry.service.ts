@@ -10,6 +10,10 @@ export interface ModelConfig {
   inputPrice: Decimal;
   outputPrice: Decimal;
   maxTokens: number;
+  maxOutputTokens: number | null;
+  tier: string;
+  creditMultiplier: Decimal;
+  planRequired: string;
 }
 
 const CACHE_TTL_MS = 60_000; // 60 seconds
@@ -28,10 +32,12 @@ export class ModelRegistryService implements OnModuleInit {
   }
 
   async refresh(): Promise<void> {
-    const [aiModels, markupConfig] = await Promise.all([
-      this.prisma.aiModel.findMany({ where: { active: true } }),
-      this.prisma.appConfig.findUnique({ where: { key: "markup_multiplier" } }),
-    ]);
+    const aiModels = await this.prisma.aiModel.findMany({
+      where: { active: true },
+    });
+    const markupConfig = await this.prisma.appConfig.findUnique({
+      where: { key: "markup_multiplier" },
+    });
 
     const map = new Map<string, ModelConfig>();
     for (const m of aiModels) {
@@ -43,6 +49,10 @@ export class ModelRegistryService implements OnModuleInit {
         inputPrice: m.inputPrice,
         outputPrice: m.outputPrice,
         maxTokens: m.maxTokens,
+        maxOutputTokens: m.maxOutputTokens,
+        tier: m.tier,
+        creditMultiplier: m.creditMultiplier,
+        planRequired: m.planRequired,
       });
     }
     this.models = map;
@@ -96,13 +106,17 @@ export class ModelRegistryService implements OnModuleInit {
 
   async getUserPrice(
     slug: string,
-  ): Promise<{ inputPrice: Decimal; outputPrice: Decimal } | undefined> {
+  ): Promise<
+    | { inputPrice: Decimal; outputPrice: Decimal; creditMultiplier: Decimal }
+    | undefined
+  > {
     await this.ensureFresh();
     const model = this.models.get(slug);
     if (!model) return undefined;
     return {
       inputPrice: model.inputPrice.mul(this.markupMultiplier),
       outputPrice: model.outputPrice.mul(this.markupMultiplier),
+      creditMultiplier: model.creditMultiplier,
     };
   }
 

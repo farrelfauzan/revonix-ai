@@ -4,16 +4,16 @@ import {
   ChatRequest,
   ChatResponse,
 } from "./provider.interface";
-import { TogetherAdapter } from "./together.adapter";
+import { OpenRouterAdapter } from "./openrouter.adapter";
 
 @Injectable()
 export class ProviderRouter {
   private readonly logger = new Logger(ProviderRouter.name);
   private readonly adapters: Record<string, ProviderAdapter>;
 
-  constructor(private readonly togetherAdapter: TogetherAdapter) {
+  constructor(private readonly openRouterAdapter: OpenRouterAdapter) {
     this.adapters = {
-      together: this.togetherAdapter,
+      openrouter: this.openRouterAdapter,
     };
   }
 

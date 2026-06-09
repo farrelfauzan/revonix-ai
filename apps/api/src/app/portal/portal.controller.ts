@@ -366,7 +366,7 @@ export class PortalController {
     }
 
     // Check limit
-    const { allowed, remaining } = await this.tierService.canMakeRequest(
+    const { allowed } = await this.tierService.canMakeRequest(
       identity.sessionId,
     );
     if (!allowed) {
@@ -605,6 +605,7 @@ export class PortalController {
     const estimatedCost = this.billing.estimateCost(
       estimatedTokens,
       pricing.inputPrice.toNumber(),
+      pricing.creditMultiplier.toNumber(),
     );
 
     let reservedAmount: Decimal;
@@ -748,6 +749,7 @@ export class PortalController {
         actualTokens.completion_tokens,
         pricing.inputPrice.toNumber(),
         pricing.outputPrice.toNumber(),
+        pricing.creditMultiplier.toNumber(),
       );
 
       // Adjust balance

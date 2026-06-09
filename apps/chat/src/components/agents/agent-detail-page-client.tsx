@@ -26,12 +26,9 @@ import {
   ArrowLeft,
   Save,
   Rocket,
-  MessageSquare,
   Loader2,
   Wrench,
-  Link2,
   Database,
-  Radio,
   Users,
   Home,
   Trash2,
@@ -41,9 +38,7 @@ import {
 import { toast } from "sonner";
 import { AgentSettingsTab } from "@/components/agents/agent-detail/agent-settings-tab";
 import { AgentToolsTab } from "@/components/agents/agent-detail/agent-tools-tab";
-import { IntegrationsTab } from "@/components/agents/agent-detail/integrations-tab";
 import { AgentKnowledgeTab } from "@/components/agents/agent-detail/agent-knowledge-tab";
-import { AgentDeploymentsTab } from "@/components/agents/agent-detail/agent-deployments-tab";
 import { AgentSubAgentsTab } from "@/components/agents/agent-detail/agent-subagents-tab";
 
 export default function AgentDetailPageClient({
@@ -61,9 +56,8 @@ export default function AgentDetailPageClient({
   const tabs = [
     { id: "settings", label: "Settings", icon: Save },
     { id: "tools", label: "Tools", icon: Wrench },
-    { id: "integrations", label: "Integrations", icon: Link2 },
     { id: "knowledge", label: "Knowledge", icon: Database },
-    { id: "deployments", label: "Deployments", icon: Radio },
+    // { id: "deployments", label: "Deployments", icon: Radio },
     { id: "subagents", label: "Sub-Agents", icon: Users },
   ] as const;
 
@@ -106,10 +100,10 @@ export default function AgentDetailPageClient({
                   variant="outline"
                   className={
                     agent.status === "active"
-                      ? "text-green-500"
+                      ? "text-green-500 capitalize"
                       : agent.status === "draft"
-                        ? "text-yellow-500"
-                        : "text-gray-500"
+                        ? "text-yellow-500 capitalize"
+                        : "text-gray-500 capitalize"
                   }
                 >
                   {agent.status}
@@ -118,7 +112,7 @@ export default function AgentDetailPageClient({
             </div>
           </div>
           <div className="flex gap-2">
-            <Link href="/">
+            <Link href="/agents" className="mr-2">
               <Button variant="ghost" size="sm">
                 <Home className="h-4 w-4 mr-2" />
                 Back to Chat
@@ -151,10 +145,10 @@ export default function AgentDetailPageClient({
                 </>
               )}
             </Button>
-            <Button variant="outline" onClick={() => router.push(`/agents/${id}/chat`)}>
+            {/* <Button variant="outline" onClick={() => router.push(`/agents/${id}/chat`)}>
               <MessageSquare className="h-4 w-4 mr-2" />
               Chat
-            </Button>
+            </Button> */}
             {agent.status === "draft" && (
               <Button
                 onClick={async () => {
@@ -233,9 +227,9 @@ export default function AgentDetailPageClient({
 
         {activeTab === "settings" && <AgentSettingsTab agent={agent} agentId={id} />}
         {activeTab === "tools" && <AgentToolsTab agent={agent} agentId={id} />}
-        {activeTab === "integrations" && <IntegrationsTab agent={agent} agentId={id} />}
+        {/* {activeTab === "integrations" && <IntegrationsTab agent={agent} agentId={id} />} */}
         {activeTab === "knowledge" && <AgentKnowledgeTab agent={agent} agentId={id} />}
-        {activeTab === "deployments" && <AgentDeploymentsTab agent={agent} />}
+        {/* {activeTab === "deployments" && <AgentDeploymentsTab agent={agent} />} */}
         {activeTab === "subagents" && (
           <AgentSubAgentsTab
             agent={agent}

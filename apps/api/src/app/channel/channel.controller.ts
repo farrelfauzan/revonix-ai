@@ -284,13 +284,15 @@ export class ChannelController {
     }
 
     const userId = req.user.userId;
+    const origin = req.headers.origin || req.headers.Origin || "*";
 
     // Setup SSE streaming
     res.raw.writeHead(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
-      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Origin": origin,
+      "Access-Control-Allow-Credentials": "true",
     });
 
     req.raw.socket.setTimeout(180000);

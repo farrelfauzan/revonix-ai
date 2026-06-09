@@ -56,6 +56,7 @@ export class AgentRunController {
 
     const { message, sessionId, output_format } = parsed.data;
     const userId = req.user.userId;
+    const origin = req.headers.origin || req.headers.Origin || "*";
 
     // Classify document intent via LLM
     const detectedFormat =
@@ -66,7 +67,8 @@ export class AgentRunController {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
-      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Origin": origin,
+      "Access-Control-Allow-Credentials": "true",
     });
 
     // Increase timeout for long-running agent chats (3 minutes)

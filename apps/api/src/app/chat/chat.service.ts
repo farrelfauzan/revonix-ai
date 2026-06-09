@@ -58,6 +58,7 @@ export class ChatService {
     const estimatedCost = this.billing.estimateCost(
       estimatedTokens,
       pricing.inputPrice.toNumber(),
+      pricing.creditMultiplier.toNumber(),
     );
 
     // 3. Reserve credits (atomic balance check + deduction)
@@ -104,6 +105,7 @@ export class ChatService {
       providerResponse.usage.completion_tokens,
       pricing.inputPrice.toNumber(),
       pricing.outputPrice.toNumber(),
+      pricing.creditMultiplier.toNumber(),
     );
 
     // 7. Adjust balance (refund difference)

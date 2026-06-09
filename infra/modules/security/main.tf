@@ -9,7 +9,9 @@ locals {
 
   # Secrets that Terraform creates as empty — you set them manually after deploy
   manual_secrets = [
-    "TOGETHER_API_KEY",
+    "OPENROUTER_API_KEY",
+    "OPENROUTER_APP_TITLE",
+    "OPENROUTER_APP_URL",
     "STRIPE_SECRET_KEY",
     "STRIPE_WEBHOOK_SECRET",
     "S3_ACCESS_KEY_ID",
@@ -44,14 +46,20 @@ resource "google_secret_manager_secret_version" "auto" {
 # ┌─────────────────────────────────────────────────────────────────┐
 # │  AFTER `terraform apply`, set the manual secrets via gcloud:    │
 # │                                                                 │
-# │  gcloud secrets versions add together-api-key \                 │
-# │    --data-file=- <<< "your-together-api-key-here"               │
+# │  gcloud secrets versions add openrouter-api-key \               │
+# │    --data-file=- <<< "your-openrouter-api-key-here"             │
+# │                                                                 │
+# │  gcloud secrets versions add openrouter-app-title \             │
+# │    --data-file=- <<< "Renovix AI"                               │
+# │                                                                 │
+# │  gcloud secrets versions add openrouter-app-url \               │
+# │    --data-file=- <<< "https://renovix.id"                       │
 # │                                                                 │
 # │  gcloud secrets versions add stripe-secret-key \                │
 # │    --data-file=- <<< "sk_live_xxx"  (when re-enabled)           │
 # │                                                                 │
 # │  gcloud secrets versions add stripe-webhook-secret \            │
-# │    --data-file=- <<< "whsec_xxx"   (when re-enabled)           │
+# │    --data-file=- <<< "whsec_xxx"   (when re-enabled)            │
 # │                                                                 │
 # │  gcloud secrets versions add s3-access-key-id \                 │
 # │    --data-file=- <<< "GOOG1E..."                                │
