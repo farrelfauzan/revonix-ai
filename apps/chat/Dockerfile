@@ -2,7 +2,7 @@
 # Usage: docker build -f apps/chat/Dockerfile .
 
 # ─── Stage 1: Install dependencies ───
-FROM node:22-alpine AS deps
+FROM mirror.gcr.io/library/node:22-alpine AS deps
 WORKDIR /app
 
 COPY package.json ./
@@ -26,7 +26,7 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 RUN cd apps/chat && npx next build
 
 # ─── Stage 3: Production (Hardened) ───
-FROM node:22-alpine
+FROM mirror.gcr.io/library/node:22-alpine
 
 RUN apk add --no-cache dumb-init
 
