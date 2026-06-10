@@ -21,10 +21,17 @@ export class S3Service {
       this.configService.getOrThrow<string>("S3_CDN_DOMAIN"),
     );
 
+    const endpoint = this.configService.get<string>("S3_ENDPOINT") || undefined;
+    const configuredRegion = this.configService.getOrThrow<string>("S3_REGION");
+    const isGcsEndpoint = endpoint?.includes("storage.googleapis.com");
+    const region = isGcsEndpoint ? "auto" : configuredRegion;
+
     this.client = new S3Client({
-      region: this.configService.getOrThrow<string>("S3_REGION"),
-      endpoint: this.configService.get<string>("S3_ENDPOINT") || undefined,
-      forcePathStyle: !!this.configService.get<string>("S3_ENDPOINT"), // needed for MinIO / local S3
+      region,
+      endpoint,
+      forcePathStyle: !!endpoint, // needed for MinIO / local S3
+      requestChecksumCalculation: "WHEN_REQUIRED",
+      responseChecksumValidation: "WHEN_REQUIRED",
       credentials: {
         accessKeyId: this.configService.getOrThrow<string>("S3_ACCESS_KEY_ID"),
         secretAccessKey: this.configService.getOrThrow<string>(

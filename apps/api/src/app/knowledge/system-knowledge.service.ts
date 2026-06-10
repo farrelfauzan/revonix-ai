@@ -30,10 +30,17 @@ export class SystemKnowledgeService implements OnApplicationBootstrap {
       "renovix-rag-docs";
     this.cdnBaseUrl = this.configService.get<string>("SYSTEM_KB_CDN_URL") ?? "";
 
+    const endpoint = this.configService.get<string>("S3_ENDPOINT") || undefined;
+    const configuredRegion = this.configService.getOrThrow<string>("S3_REGION");
+    const isGcsEndpoint = endpoint?.includes("storage.googleapis.com");
+    const region = isGcsEndpoint ? "auto" : configuredRegion;
+
     this.s3Client = new S3Client({
-      region: this.configService.getOrThrow<string>("S3_REGION"),
-      endpoint: this.configService.get<string>("S3_ENDPOINT") || undefined,
-      forcePathStyle: !!this.configService.get<string>("S3_ENDPOINT"),
+      region,
+      endpoint,
+      forcePathStyle: !!endpoint,
+      requestChecksumCalculation: "WHEN_REQUIRED",
+      responseChecksumValidation: "WHEN_REQUIRED",
       credentials: {
         accessKeyId: this.configService.getOrThrow<string>("S3_ACCESS_KEY_ID"),
         secretAccessKey: this.configService.getOrThrow<string>(

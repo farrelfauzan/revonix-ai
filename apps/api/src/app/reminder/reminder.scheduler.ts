@@ -8,6 +8,7 @@ import { AgentToolService } from "../agent/agent-tool.service";
 import { AgentMemoryService } from "../agent/agent-memory.service";
 import { UsageService } from "../usage/usage.service";
 import { Decimal } from "@prisma/client/runtime/client";
+import { Prisma } from "@generated/prisma/client.js";
 
 const MAX_TOOL_ITERATIONS = 15;
 
@@ -64,6 +65,12 @@ export class ReminderScheduler {
         }
       }
     } catch (err: any) {
+      if (this.isMissingRemindersTableError(err)) {
+        this.logger.warn(
+          "[processReminders] Reminders table not found. Skipping scheduler until reminder migration is applied.",
+        );
+        return;
+      }
       this.logger.error(
         `[processReminders] Scheduler error: ${err.message}`,
         err.stack,
@@ -71,6 +78,19 @@ export class ReminderScheduler {
     } finally {
       this.processing = false;
     }
+  }
+
+  private isMissingRemindersTableError(error: unknown): boolean {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
+      return false;
+    }
+
+    if (error.code !== "P2021") {
+      return false;
+    }
+
+    const table = String(error.meta?.table ?? "").toLowerCase();
+    return table.includes("reminders");
   }
 
   private async executeReminder(reminder: any) {
