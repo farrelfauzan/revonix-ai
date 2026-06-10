@@ -48,7 +48,7 @@ export class MemoryExtractionService {
     private readonly policyService: MemoryPolicyService,
     private readonly prisma: PrismaService,
   ) {
-    this.apiKey = this.configService.getOrThrow<string>("TOGETHER_API_KEY");
+    this.apiKey = this.configService.getOrThrow<string>("OPENROUTER_API_KEY");
   }
 
   /**

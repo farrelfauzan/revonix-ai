@@ -11,11 +11,11 @@ export interface EmbeddingResult {
 export class EmbeddingService {
   private readonly logger = new Logger(EmbeddingService.name);
   private readonly apiKey: string;
-  private readonly baseUrl = "https://api.together.xyz/v1";
+  private readonly baseUrl = "https://openrouter.ai/api/v1";
   private readonly model = "intfloat/multilingual-e5-large-instruct";
 
   constructor(private readonly configService: ConfigService) {
-    this.apiKey = this.configService.getOrThrow<string>("TOGETHER_API_KEY");
+    this.apiKey = this.configService.getOrThrow<string>("OPENROUTER_API_KEY");
   }
 
   async embed(texts: string[]): Promise<EmbeddingResult[]> {
